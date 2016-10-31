@@ -1,3 +1,3 @@
 all:
-	g++ main.cpp inst.cpp -o main
+	g++ main.cpp inst.cpp registers.cpp -o main
 
