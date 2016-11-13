@@ -10,7 +10,7 @@ Reading in ASCII input file: Needs to be changed to read filename from command l
 
 fetch(): mostly good
 
-decode(): BZ/BNZ zero flag dependencies, X register dependencies, dependencies all around!!!!!!
+decode(): BZ/BNZ zero flag dependencies (+ register-with-most-recently-set-zero-flag pointer register), X register dependencies, dependencies all around!!!!!!
 
 alu1(): 
 
