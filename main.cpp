@@ -10,6 +10,7 @@ using namespace std;
 #include <string>
 #include <cstdlib>
 #include <algorithm>
+#include <bitset>
 
 //local files
 #include "inst.h"
@@ -42,12 +43,20 @@ bool stall [8]; // true if there is a stall in the ith stage
 int curr_pc[9];
 int next_pc[9];
 
-bool squash;
+bool squash;  //when true: fetch and decode are not executed 
 
 
 //functions
 int access_memory_at (int i){
   return memory[i/4];
+}
+
+int write_to_mem (int i, int v){
+  memory[1/4] = v;
+}
+
+void to_b (int i, bool * result){
+  
 }
 
 int get_inst_from_file (const char *);
@@ -86,10 +95,10 @@ int main () {
       
       wb(curr_pc[WB]);
       mem(curr_pc[MEM]);
-      delay(curr_pc[DELAY]);
       alu2(curr_pc[ALU2]);
-      beu(curr_pc[BEU]);
+      delay(curr_pc[DELAY]);
       alu1(curr_pc[ALU1]);
+      beu(curr_pc[BEU]);
       decode(curr_pc[DRF]);
       fetch(curr_pc[FETCH]);
         
@@ -168,7 +177,7 @@ int fetch (int inst_index) {
             } else if (inst == STORE || inst == BAL || inst == JUMP){
               i.set_src_ar(1, reg);i.set_dest(ND);
             } else if (inst == BZ || inst == BNZ){
-              i.set_lit(reg/4); i.set_src(1, REG_X);  
+              i.set_lit(reg); i.set_src(1, REG_X);  
 
             }else {
               //??? halt????
@@ -312,10 +321,10 @@ int decode (int i){
           
         }else {
           //nif ()
-        }
+        }//end if ! stall
         if (!(stall[ALU1])){
           next_pc[ALU1] = ND;
-        }
+        }//end if ! stall
         break;
       case STORE :
         
@@ -339,21 +348,21 @@ int decode (int i){
             d.mark_as_valid(p);
           } else {
             
-          }
+          }//end dependency tree
           if (d.ready()){
             
           } else {
             p = (p == 1 ? 2 : 1);
               
             
-          }
-        }
+          }//end if
+        }//end if ! stall
         
         
         //still have to check 2's validity later
         
         break;
-    }
+    }//end switch
      
   } else {  // nop 
     if (stall[DRF]) stall[DRF] = false;
@@ -362,12 +371,12 @@ int decode (int i){
       next_pc[DRF] = i;
     } else {
       next_pc[ALU1] = i;
-    }
+    } //end !stall 
     if(!(stall[BEU])){
       next_pc[BEU] = ND;
-    }
-  }
-}
+    } //end if !stall beu
+  }// end if = ND
+} // end decode
 
 int beu(int i){
   
@@ -381,12 +390,12 @@ int beu(int i){
           if (rf[ZERO_FLAG]->read_value() == 0){
             branch = true;
             pc_int[i].set_res(i + pc_int[i].get_lit());
-          }
+          }//end if
           break;
         case BNZ :
           if(rf[ZERO_FLAG]->read_value() != 0){
             branch = true;
-          }
+          }//end if
           break;
         case JUMP : 
           
@@ -396,56 +405,89 @@ int beu(int i){
           //have to set up stufff;-;
           branch = true;
           break;
-      }
+      }//end switch
       if (branch = true){
         next_pc[DRF] = ND;
         next_pc[FETCH] = pc_int[i].get_res();
         squash = true;
       }else{
         squash = false;
-      }
-    } else { squash = false;}
-  }
+      }// end if branch 
+    } else { squash = false;} // end if ! ND
+  }//end ! stall
   if (stall[DELAY]){
     stall[BEU] = true;
     next_pc[BEU] = i;
   } else {
     next_pc[DELAY] = i;
-  }
-}
+  }//end else stall
+}// end beu
 
 int alu1 (int i){
   if (stall[ALU1]){
     stall[ALU1] = false;
   }else{
       if (i != ND){
-        switch (pc_int[i].get_int()){
+        Instruction a = pc_int[i];
+        //bitset <12> src1, src2;
+        switch (a.get_int()){
           case ADD :
-            //pc_int[i].set_res();
+            a.set_res(a.get_srcs(1) + a.get_srcs(2));
             break;
           case SUB : 
+            a.set_res(a.get_srcs(1) - a.get_srcs(2));
+            break;
           case MUL :
+            a.set_res(a.get_srcs(1) * a.get_srcs(2));
+            break;
           case MOVC :
+            a.set_res(a.get_lit());
+            break;
           case AND :
+            a.set_res((int)(bitset<12>(a.get_srcs(1)) & bitset<12>(a.get_srcs(2))).to_ulong());
+            break;
           case OR :
+            a.set_res((int)(bitset<12>(a.get_srcs(1)) | bitset<12>(a.get_srcs(2))).to_ulong());
+            break;
           case EX_OR :
+            a.set_res((int)(bitset<12>(a.get_srcs(1)) ^ bitset<12>(a.get_srcs(2))).to_ulong());
+            break;
           case STORE :
-          case LOAD : break;
-            
-        
-      }
-    }
+            a.set_res(a.get_srcs(2) + a.get_lit());
+              break;
+          case LOAD : 
+            a.set_res(a.get_srcs(1) + a.get_lit());
+            break;
+    
+      }//end switch
+    } // if ! ND
+  }//end else stall
+  if (stall[ALU2]){
+    stall[ALU1] = true;
+    next_pc[ALU1] = i;
+  } else {
+    next_pc[ALU2] = i;
   }
-}
+  
+}// end alu1
+
+
 int delay (int i){
   //
   // :( 
+  //so like delay does nothing
+  //but we might be able to control any conflicts between alu2 and delay here
   if(stall[MEM]){
+    stall[DELAY] = true;
+    next_pc[DELAY] = i;
+  } else if (stall[ALU2] || i < curr_pc[ALU2]){
+    next_pc[MEM] = i;
+  } else {
     stall[DELAY] = true;
     next_pc[DELAY] = i;
   }
   
-}
+}//end delay
 
 
 int alu2(int i){
@@ -515,7 +557,7 @@ int mem(int i){
     if(i != ND){
       switch(pc_int[i].get_int()){
         case STORE: 
-          memory[access_memory_at(pc_int[i].get_res())] = pc_int[i].get_srcs(1); 
+          write_to_mem(pc_int[i].get_res(), pc_int[i].get_srcs(1)); 
           break;
         case LOAD:
           pc_int[i].set_res(memory[access_memory_at(pc_int[i].get_res())]);
@@ -545,18 +587,18 @@ int mem(int i){
 
 int wb (int i) {
   if(i != ND){
+    fwd_val[MEM][0] = pc_int[i].get_dest();
+    fwd_val[MEM][1] = pc_int[i].get_res();
+    fwd_val[MEM][2] = i;
     if  (pc_int[i].get_dest() != ND) {
       rf[pc_int[i].get_dest()]->write_value(pc_int[i].get_res());
       rf[pc_int[i].get_dest()]->write_valid_bit(true);
-      for (int j = 1; j < WB; j ++){
-        if (fwd_val[j][2] == i){
-          fwd_val[j][0] = fwd_val[j][1]= fwd_val[j][2] = ND;
-        }
       }
     }
+    
     if(pc_int[i].get_int() == HALT){
       return EOP;
     }
-  }
+  
   return 0;
 }
