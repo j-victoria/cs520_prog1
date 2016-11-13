@@ -2,9 +2,12 @@
 
 ## Overall
 Marvin: Documentation, refactoring
+
 Jay: Coding etc.
 
 ## Parts
+Reading in ASCII input file: Needs to be changed to read from command line instead of user prompt
+
 fetch(): mostly good
 
 decode(): BZ/BNZ zero flag dependencies, X register dependencies, dependencies all around!!!!!!
