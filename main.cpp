@@ -26,8 +26,14 @@ using namespace std;
 #define MEM 7
 #define WB 8
 
-#define ZERO_FLAG 17
-#define REG_X 18
+// special 'zero flag register'
+//   - set to 1 when most recent ALU operation yields 0
+//   - set to 0 when most recent ALU operation does not yield 0
+// NOTE: planning to move this to the 'Register' class instead?
+//#define ZERO_FLAG 16
+
+// special 'register X' to hold address of the instruction AFTER a BAL,
+#define REG_X 17
 
 #define EOP -2 // used to signal end of processing
 
