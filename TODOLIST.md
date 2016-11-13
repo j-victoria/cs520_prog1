@@ -28,5 +28,4 @@ main(): adjust Clearing out to handle all globals
         add in 'end of processing' handleing'
         add in error processing
         command processing???
-        
-file to instruction: allow files beyond the first (pushback always makes a new entry! maybe delete vector every time?)
+
