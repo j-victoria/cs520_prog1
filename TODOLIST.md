@@ -29,3 +29,4 @@ main(): adjust Clearing out to handle all globals
         add in error processing
         command processing???
 
+general debugging.
