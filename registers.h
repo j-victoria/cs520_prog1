@@ -10,4 +10,5 @@ class Register {
     int read_value();
     void write_valid_bit(bool);
     void write_value(int);
+    void reset();
 };

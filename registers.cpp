@@ -22,3 +22,9 @@ void Register::write_value (int n){
   value = n;
   return;
 }
+
+void Register::reset (){
+  valid = false;
+  value = 0;
+  return;
+}
