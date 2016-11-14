@@ -56,8 +56,8 @@ int write_to_mem (int i, int v){
   memory[i/4] = v;
 }
 
-void to_b (int i, bool * result){
-  
+int is_zero (int v){
+  return (v == 0);
 }
 
 int get_inst_from_file (const char *);
@@ -191,7 +191,7 @@ int fetch (int inst_index) {
               i.set_lit(reg); i.set_src(1, REG_X);  
 
             }else {
-              //??? halt????
+              //error case
             }
 
 
@@ -204,7 +204,7 @@ int fetch (int inst_index) {
             }else if (inst == MOVC || inst == JUMP || inst == BAL){
               i.set_lit(reg);
             }else {
-              // ????? 
+              // error case
             }
 
           } else {
@@ -213,6 +213,8 @@ int fetch (int inst_index) {
               i.set_lit(reg);
             } else if (inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR){
               i.set_src_ar(2, reg);
+            } else {
+              //error case
             }
             
           }
@@ -263,15 +265,20 @@ int decode (int i){
             d.mark_as_valid(j);
           } else {
             //we have to walk forward through the stages to find the instruction we are  dependant on
-            //we can ignore the branch FU's for now (??/)
             if (pc_int[curr_pc[ALU1]].get_dest() == d.get_src_ar(j)){
               dep = curr_pc[ALU1];
+            }else if (pc_int[curr_pc[BEU]].get_dest() == d.get_src_ar(j)) {
+              dep = curr_pc[BEU];
             } else if (pc_int[curr_pc[ALU2]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[ALU2];
+            } else if (pc_int[curr_pc[DELAY]].get_dest() == d.get_src_ar(j)) {
+              dep = curr_pc[DELAY];
             } else if (pc_int[curr_pc[MEM]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[MEM];
             } else if (pc_int[curr_pc[WB]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[WB];
+            } else {
+              //error case
             }
             d.create_dependency(j, dep);
             d.mark_as_invalid(j);
@@ -283,90 +290,174 @@ int decode (int i){
         rf[d.get_dest()].write_valid_bit(false);
       }
       
-      // zero register stuff!!!
+      // zero flag stuff!!!
       if (d.get_int() == ADD || d.get_int() == SUB || d.get_int() == MUL){
-        rf[ZERO_FLAG].write_valid_bit(false);
+        z_ptr = i;
       }
       if (d.get_int() == BNZ || d.get_int() == BZ){
-          int dep;
-          if(pc_int[curr_pc[ALU1]].get_int() == ADD || pc_int[curr_pc[ALU1]].get_int() == SUB || pc_int[curr_pc[ALU1]].get_int() == MUL){
-            dep = curr_pc[ALU1];
-          }else
-          d.create_dependency(2, dep);
-          d.mark_as_invalid(2);
+        if(z_ptr == curr_pc[ALU1]){  
+          d.create_dependency(1, z_ptr);
+          d.mark_as_invalid(1);
+        } else if (rf[pc_int[z_ptr].get_dest()].read_valid_bit()) {
+          d.set_src(1, rf[pc_int[z_ptr].get_dest()].read_z());
+          d.mark_as_valid(1);
+        } else if(pc_int[curr_pc[ALU2]].get_dest() == z_ptr){
+          d.set_src(1, fwd_val[ALU2][1]);
+          d.mark_as_valid(1);
+        } else if (pc_int[curr_pc[MEM]].get_dest() == z_ptr){
+          d.set_src(1, fwd_val[MEM][1]);
+          d.mark_as_valid(1);
         }
+      }
         
         // X register stuff
         if (d.get_int() == BAL) {
-         d.set_dest(REG_X);
-        }
-        if (d.get_int() == JUMP && d.get_srcs(1) == REG_X){ 
-          if(rf[REG_X].read_valid_bit()){
-            
-          } else {
-            
-          }
-          
-        }
-      }
+          d.set_dest(REG_X);
+          rf[REG_X].write_valid_bit(false);
+        } //jump's dependency is taken care of above, since X is just a regular register with a special name :/
+
+      } // end else stall
      
     
     int p;
     
     //issusing 
-    switch (d.get_int()){
-      case BAL : case BNZ : case BZ : case JUMP :
-        if(stall[BEU]){
-          stall[DRF] = true;
-          next_pc[DRF] = i;
-          
-        }else if (d.ready()){
-          next_pc[BEU] = i;
-          
-        }else {
-          //nif ()
-        }//end if ! stall
-        if (!(stall[ALU1])){
-          next_pc[ALU1] = ND;
-        }//end if ! stall
-        break;
-      case STORE :
-        
-        break;
-      default :
-        if (stall[ALU1]){
-          stall[DRF] = true;
-          next_pc[DRF] = i;
-        } else if(d.ready()){
-          next_pc[ALU1] = i;
+   intstructions_t di;
+    if (di == BAL || di == JUMP || di == BZ || di == BNZ){
+      if(stall[BEU]){
+        stall[DRF] = true;
+        next_pc[DRF] = i;
+
+      }else if (d.ready()){
+        next_pc[BEU] = i;
+
+      }else {
+        //where we have a dependency issue.
+        // BZ & BNZ - zero flag  JUMP - X register BAL - src 1
+        if (di == BZ || di == BNZ){
+          if(fwd_val[ALU2][2] == d.depends(1)){
+            d.set_src(1, is_zero(fwd_val[ALU2][1]));
+            d.mark_as_valid(1);
+          } else if(fwd_val[MEM][2] == d.depends(1)){
+            d.set_src(1, is_zero(fwd_val[MEM][1]));
+            d.mark_as_valid(1);
+          }else if(fwd_val[WB][2] == d.depends(1)){
+            d.set_src(1, is_zero(fwd_val[WB][1]));
+            d.mark_as_valid(1);
+          } else {
+            //we didn't find it :/
+            //stall 
+            stall[DRF] = true;
+            next_pc[DRF] = i;
+          }
+        } else if (di == JUMP){
+          if(fwd_val[BEU][2] == d.depends(1)){
+            d.set_src(1, fwd_val[BEU][1]);
+            d.mark_as_valid(1);
+          } else if (fwd_val[DELAY][2] == d.depends(1)){
+            d.set_src(1, fwd_val[DELAY][1]);
+            d.mark_as_valid(1);
+          } else if (fwd_val[MEM][2] == d.depends(1)){
+            d.set_src(1, fwd_val[MEM][1]);
+            d.mark_as_valid(1);
+          } else if (fwd_val[WB][2] == d.depends(1)){
+            d.set_src(1, fwd_val[WB][1]);
+            d.mark_as_valid(1);
+          } else {
+            //didn't find it :/
+            stall[DRF] = true;
+            next_pc[DRF] = i;
+          }
+        } else if (di == BAL){
+          if(fwd_val[ALU2][2] == d.depends(1)){
+            d.set_src(1, fwd_val[ALU2][1]);
+            d.mark_as_valid(1);
+          } else if(fwd_val[MEM][2] == d.depends(1)){
+            d.set_src(1, fwd_val[MEM][1]);
+            d.mark_as_valid(1);
+          }else if(fwd_val[WB][2] == d.depends(1)){
+            d.set_src(1, fwd_val[WB][1]);
+            d.mark_as_valid(1);
+          } else {
+            //we didn't find it :/
+            //stall 
+            stall[DRF] = true;
+            next_pc[DRF] = i;
+          }/
         } else {
-          p = (d.is_valid(1)?2:1);
-          if (fwd_val[ALU2][2] == d.depends(p)){
-            d.set_src(p, fwd_val[ALU2][1]); 
-            d.mark_as_valid(p);
-          }else if (fwd_val[MEM][2] == d.depends(p)) {
-            d.set_src(p, fwd_val[MEM][1]);
-            d.mark_as_valid(p);
-          }else if (rf[d.get_src_ar(p)].read_valid_bit()) {
-            
-            d.mark_as_valid(p);
-          } else {
-            
-          }//end dependency tree
+          //error case
+        }
+ 
+      }//end if ! stall
+      if (!(stall[ALU1])){
+        next_pc[ALU1] = ND;
+      }//end if ! stall
+
+    } else if (di == STORE){
+      //store can go onto ALU1 w/o source 1
+      //so it needs a special dependency tree 
+      if(stall[ALU1]){
+        stall[DRF] = true;
+        next_pc[DRF] = i;
+      } else if(d.is_valid(2)){
+        next_pc[ALU1] = i;
+      } else {
+        if (fwd_val[ALU2][2] == d.depends(2)){
+           d.set_src(2, fwd_val[ALU2][1]);
+           d.mark_as_valid(2);
+        } else if (fwd_val[MEM][2] == d.depends(2)){
+          d.set_src(2, fwd_val[MEM][1]);
+          d.mark_as_valid(2);
+        } else if (fwd_val[WB][2] == d.depends(2)){
+          d.set_src(2, fwd_val[WB][1]);
+          d.mark_as_valid(2);
+        } else{
+          // didn't find it!
+          stall[DRF] = true;
+          next_pc[DRF] = i;
+        }
+      }
+      
+      if(!(stall[BEU])){
+        next_pc[BEU] = ND;
+      }
+      
+    } else {  //reg-to-reg,, load & halt 
+      if (stall[ALU1]){
+        stall[DRF] = true;
+        next_pc[DRF] = i;
+      } else if(d.ready()){
+        next_pc[ALU1] = i;
+      } else {
+        for(int p = 1; p <= 2; p ++){
+          if (!(d.is_valid(p))){
+            if (fwd_val[ALU2][2] == d.depends(p)){
+              d.set_src(p, fwd_val[ALU2][1]); 
+              d.mark_as_valid(p);
+            }else if (fwd_val[MEM][2] == d.depends(p)) {
+              d.set_src(p, fwd_val[MEM][1]);
+              d.mark_as_valid(p);
+            }else if (fwd_val[WB][2] == d.depends(p))) {
+              d.set_src(p, fwd_val[WB][1]);
+              d.mark_as_valid(p);
+            } else {
+              //didn't find
+            }//end dependency tree
+          }
           if (d.ready()){
-            
+            next_pc[ALU1] = i;
           } else {
-            p = (p == 1 ? 2 : 1);
-              
-            
+            //didn't find one or more source
+            stall[DRF] = true;
+            next_pc[DRF] = i;
           }//end if
-        }//end if ! stall
-        
-        
-        //still have to check 2's validity later
-        
-        break;
-    }//end switch
+        }
+        if(!(stall[BEU])){
+          next_pc[BEU] = ND;
+        }
+      }//end switch
+
+    }//end ! ND
      
   } else {  // nop 
     if (stall[DRF]) stall[DRF] = false;
@@ -392,33 +483,43 @@ int beu(int i){
       Instruction b = pc_int[i];
       switch(b.get_int()){
         case BZ :
-          if (rf[ZERO_FLAG].read_value() == 0){
+          if (b.get_srcs(1)){
             branch = true;
-            b.set_res(i + (b.get_lit() / 4);
+            b.set_res(i + (b.get_lit() / 4));
           }//end if
           break;
         case BNZ :
-          if(rf[ZERO_FLAG].read_value() != 0){
+          if(!(b.get_srcs(1))){
             branch = true;
-            
+            b.set_res(i + (b.get_lit() / 4));
           }//end if
           break;
         case JUMP : 
-          
+          b.set_res((b.get_src(1) + b.get_lit())/4);
           branch = true;
           break;
         case BAL :
           //have to set up stufff;-;
+          b.set_res((b.get_src(1) + b.get_lit()/4));
+          
           branch = true;
           break;
       }//end switch
       if (branch = true){
         next_pc[DRF] = ND;
-        next_pc[FETCH] = pc_int[i].get_res();
+        next_pc[FETCH] = b.get_res();
         squash = true;
       }else{
         squash = false;
       }// end if branch 
+      
+      if (b.get_int() == BAL){
+        b.set_res(i + 1);
+        fwd_val[BEU][0] = REG_X;
+        fwd_val[BEU][1] = b.get_res();
+        fwd_val[BEU][2] = i;
+      }
+      
     } else { squash = false;} // end if ! ND
   }//end ! stall
   if (stall[DELAY]){
@@ -484,15 +585,43 @@ int delay (int i){
   //so like delay does nothing
   //but we might be able to control any conflicts between alu2 and delay here
   //change to the lower pc goes through
-  if(stall[MEM]){
+  
+  //forward BAL case
+  if (i != ND){
+    if(pc_int[i].get_int() == BAL){
+      fwd_val[DELAY][0] = pc_int[i].get_dest();
+      fwd_val[DELAY][1] = pc_int[i].get_res();
+      fwd_val[DELAY][2] = i;
+    }
+  }
+  
+  
+  
+  if(i == ND){
+    //allow alu2 to go through
+  } else if (stall[MEM]) {
+    // i is not ND and there is a stall in MEM
     stall[DELAY] = true;
     next_pc[DELAY] = i;
-  } else if (stall[ALU2] || i < curr_pc[ALU2]){
+  } else if (stall[ALU2]){
+    //i is not ND, there is not stall in MEM and there is a stall in ALU2
     next_pc[MEM] = i;
-  } else {
+  } else if (curr_pc[ALU2] == ND){
+    //i is not ND, there is no stall in MEM or ALU2, and ALU2 has a NOP
+    next_pc[MEM] = i;
+  } else if (i < curr_pc[ALU2]) {
+    //neither i nor ALU2 are ND, there are no stalls in ALU or MEM
+    //we let the lower line # go through
+    next_pc[MEM] = i;
+    stall[ALU2] = true;
+    next_pc[ALU2] = curr_pc[ALU2];
+  } else if (i > curr_pc[ALU2]) {
+    //ALU has the lower line number
     stall[DELAY] = true;
     next_pc[DELAY] = i;
-  } //add negative one case
+  }  else {
+    //error case
+  }
   
 }//end delay
 
