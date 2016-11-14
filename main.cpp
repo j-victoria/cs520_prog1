@@ -11,6 +11,7 @@ using namespace std;
 #include <cstdlib>
 #include <algorithm>
 #include <bitset>
+#include <assert.h>
 
 //local files
 #include "inst.h"
@@ -71,63 +72,53 @@ int mem (int);
 int wb (int);
 
 //main
-int main () {
+int main (int argc, char *argv[]) {
+  
+  
   
   string in;
-  
+  int rv;
   memset(stall, false, sizeof(stall));
   
   for(int i = 0; i < 9; i++){
     stall[i] = false;
   }
   
-  do {
-    for (int i = 0; i < 20; i++){
-      rf[i].reset();
-    }
-   
-    cout << "Enter a file to execute: ";
-    getline(cin, in);
-    if (in.empty())
-      in = "test_inst";
-    cout << "Reading file ..." << cout;
-    if (get_inst_from_file(in.c_str()) != 0) {cout << "error opening file" << endl; return 0;}
-    cout << "There are " << pc_int.size() << " instructions in " << in  << endl;
-    cout << "Starting exectution [enter to go through a cycle]..." << endl;
-    memset(next_pc, -1, sizeof(next_pc));
-    next_pc[FETCH] = 0;
-    do{
-      //copy the new pc addresses into the current pc addr buffer
-      //acts as latch
-      //this is the only time the curr_pc is written to
-      memcpy(curr_pc, next_pc, sizeof(curr_pc));
-      
-      wb(curr_pc[WB]);
-      mem(curr_pc[MEM]);
-      alu2(curr_pc[ALU2]);
-      delay(curr_pc[DELAY]);
-      alu1(curr_pc[ALU1]);
-      beu(curr_pc[BEU]);
-      decode(curr_pc[DRF]);
-      fetch(curr_pc[FETCH]);
-        
-      cin.ignore();
-      
-    }while (true);
+  for (int i = 0; i < 20; i++){
+    rf[i].reset();
+  }
+
+  in = argv[1];
+  cout << "Reading file ..." << cout;
+  if (get_inst_from_file(in.c_str()) != 0) {cout << "error opening file" << endl; return 0;}
+  cout << "There are " << pc_int.size() << " instructions in " << in  << endl;
+  cout << "Starting exectution [enter to go through a cycle]..." << endl;
+  memset(next_pc, -1, sizeof(next_pc));
+  next_pc[FETCH] = 0;
+  do{
+    //copy the new pc addresses into the current pc addr buffer
+    //acts as latch
+    //this is the only time the curr_pc is written to
+    memcpy(curr_pc, next_pc, sizeof(curr_pc));
+
+    rv = wb(curr_pc[WB]); assert (rv == 0);
+    rv = mem(curr_pc[MEM]); assert (rv == 0);
+    rv = alu2(curr_pc[ALU2]); assert (rv == 0);
+    rv = delay(curr_pc[DELAY]); assert (rv == 0);
+    rv = alu1(curr_pc[ALU1]); assert (rv == 0);
+    rv = beu(curr_pc[BEU]); assert (rv == 0);
+    rv = decode(curr_pc[DRF]); assert (rv == 0);
+    rv = fetch(curr_pc[FETCH]);
+
+    cin.ignore();
+
+  }while (rv != EOP);
     
-    //clear out globals after each run
-    //add reamining globals
-    pc_int.clear();
-    for (int i = 0; i < 20; i++){
-      rf[i].reset();
-    }
-    memset(memory, 0, sizeof(memory));
-  }while (true);
   return 0;
 }
 
-//bz/bnz will only stall if add/sub/mul in alu1
-//change to handle files aside from the 1st
+
+
 int get_inst_from_file (const char * file_name){
   ifstream inst_file;
   string inst;
@@ -154,7 +145,7 @@ int fetch (int inst_index) {
     } else {
       Instruction i = pc_int[inst_index];
       string s = i.get_name();
-      if(s.compare(0, 10, "JUMP X, #0")){
+      if(s.compare(0, 10, "JUMP X, #0")){ //hopefully this is the only special case ;-;
         i.set_inst("JUMP");
         i.set_src(1, REG_X);
         i.set_lit(0);
@@ -219,7 +210,7 @@ int fetch (int inst_index) {
             
           }
           r++;
-          while(!(isdigit(++j)));
+          while(!(isdigit(++j)) && j <= s.length());
         }
       }
     }
@@ -236,6 +227,10 @@ int fetch (int inst_index) {
   
   if (squash){
     squash = false;
+  } else if (inst_index + 1 >= pc_int.size()) { // need to prevent ourselves from going over the edge
+    next_pc[FETCH] = ND;
+  } else if (inst_index == ND){
+    next_pc[FETCH] = ND;
   } else {
     next_pc[FETCH] = inst_index + 1;
   }
@@ -322,7 +317,7 @@ int decode (int i){
     int p;
     
     //issusing 
-   intstructions_t di;
+   instructions_t di;
     if (di == BAL || di == JUMP || di == BZ || di == BNZ){
       if(stall[BEU]){
         stall[DRF] = true;
@@ -383,9 +378,10 @@ int decode (int i){
             //stall 
             stall[DRF] = true;
             next_pc[DRF] = i;
-          }/
+          }
         } else {
           //error case
+          ;
         }
  
       }//end if ! stall
@@ -437,11 +433,12 @@ int decode (int i){
             }else if (fwd_val[MEM][2] == d.depends(p)) {
               d.set_src(p, fwd_val[MEM][1]);
               d.mark_as_valid(p);
-            }else if (fwd_val[WB][2] == d.depends(p))) {
+            }else if (fwd_val[WB][2] == d.depends(p)) {
               d.set_src(p, fwd_val[WB][1]);
               d.mark_as_valid(p);
             } else {
               //didn't find
+              ;
             }//end dependency tree
           }
           if (d.ready()){
@@ -471,6 +468,8 @@ int decode (int i){
       next_pc[BEU] = ND;
     } //end if !stall beu
   }// end if = ND
+  
+  return 0;
 } // end decode
 
 int beu(int i){
@@ -495,12 +494,12 @@ int beu(int i){
           }//end if
           break;
         case JUMP : 
-          b.set_res((b.get_src(1) + b.get_lit())/4);
+          b.set_res((b.get_srcs(1) + b.get_lit())/4);
           branch = true;
           break;
         case BAL :
           //have to set up stufff;-;
-          b.set_res((b.get_src(1) + b.get_lit()/4));
+          b.set_res((b.get_srcs(1) + b.get_lit()/4));
           
           branch = true;
           break;
@@ -528,6 +527,7 @@ int beu(int i){
   } else {
     next_pc[DELAY] = i;
   }//end else stall
+  return 0;
 }// end beu
 
 int alu1 (int i){
@@ -575,7 +575,7 @@ int alu1 (int i){
   } else {
     next_pc[ALU2] = i;
   }
-  
+  return 0;
 }// end alu1
 
 
@@ -623,6 +623,7 @@ int delay (int i){
     //error case
   }
   
+  return 0;
 }//end delay
 
 
@@ -702,11 +703,12 @@ int mem(int i){
           
           break;
       }
-    //gots to forward every stage to make sure every guy can get my result!
-    //and by every stage I mean ALU2 and MEM
-    fwd_val[MEM][0] = pc_int[i].get_dest();
-    fwd_val[MEM][1] = pc_int[i].get_res();
-    fwd_val[MEM][2] = i;
+      //gots to forward every stage to make sure every guy can get my result!
+      //and by every stage I mean ALU2 and MEM
+        //jk I need to forward from every stage after decode except alu1
+      fwd_val[MEM][0] = pc_int[i].get_dest();
+      fwd_val[MEM][1] = pc_int[i].get_res();
+      fwd_val[MEM][2] = i;
     }
     
     
@@ -722,7 +724,7 @@ int mem(int i){
     next_pc[WB] = i;
   }
   return 0;
-}
+}//end mem
 
 int wb (int i) {
   if(i != ND){
