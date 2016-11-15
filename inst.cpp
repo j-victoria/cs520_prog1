@@ -31,6 +31,26 @@ int Instruction::set_inst(string s) {
   
   return 0;
 }
+
+string Instruction::printable_inst(){
+  switch (inst){
+    case ADD : return "ADD"; break;
+    case SUB : return "SUB"; break;
+    case MOVC : return "MOVC"; break;
+    case MUL : return "MUL"; break;
+    case AND : return "AND"; break;
+    case OR : return "OR"; break;
+    case EX_OR : return "EX_OR"; break;
+    case LOAD : return "LOAD"; break;
+    case STORE : return "STORE"; break;
+    case BZ : return "BZ"; break;
+    case BNZ : return "BNZ"; break;
+    case JUMP : return "JUMP"; break;
+    case BAL : return "BAL"; break;
+    case HALT: return "HALT"; break;
+  }
+}
+
 string Instruction::get_name(){
   return instruction_name;
 }
@@ -51,7 +71,6 @@ int Instruction::get_srcs(int i){
   switch(i){
     case 1 : return src1; break;
     case 2 : return src2; break;
-    case 3 : return src3; break;
   }
 }
 
@@ -59,7 +78,6 @@ int Instruction::get_src_ar(int i){
     switch(i){
     case 1 : return src1_ar; break;
     case 2 : return src2_ar; break;
-    case 3 : return src3_ar; break;
   }
 }
 
@@ -67,7 +85,6 @@ void Instruction::mark_as_valid(int i){
   switch(i){
     case 1 : src1_valid = true; break;
     case 2 : src2_valid = true; break;
-    case 3 : src3_valid = true; break;
   }
 }
 
@@ -75,7 +92,6 @@ void Instruction::mark_as_invalid(int i){
   switch(i){
     case 1 : src1_valid = false; break;
     case 2 : src2_valid = false; break;
-    case 3 : src3_valid = false; break;
   }
 }
 

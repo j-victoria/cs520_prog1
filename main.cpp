@@ -145,31 +145,37 @@ int fetch (int inst_index) {
     } else {
       Instruction i = pc_int[inst_index];
       string s = i.get_name();
-      if(s.compare(0, 10, "JUMP X, #0")){ //hopefully this is the only special case ;-;
-        i.set_inst("JUMP");
-        i.set_src(1, REG_X);
-        i.set_lit(0);
-      }else {
+
+      i.set_inst(s.substr(0, s.find(" ")));
+      cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
+      string rest = s.substr(s.find(" "), s.length() - 1);
       
-        i.set_inst(s.substr(0, s.find(" ")));
-        string rest = s.substr(s.find(" "), s.length() - 1);
-        int j = 1, r = 1;
+      cout << rest << endl;
+      
+      if (i.get_int() == JUMP){
+        // handle special case here
+      } else {
+        
+        
+        int j = 0, r = 1;
         instructions_t inst = i.get_int();
 
         //set up default case 
         i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
         //this should make decode slightly easier
 
-
+        
+        j = rest.find_first_of("0123456789", j + 1);
         while (j < rest.length()){
           int reg = 0;
           int sign = 1;
           if (rest[j - 1] == '-') sign = -1;
-
+  
           while ( isdigit( rest[j] ) ) {
-            reg = reg * 10 + (int) rest[j];
+            reg = reg * 10 + ((int) rest[j] - 48);
             j++;
           }
+          cout << "val :" << reg << endl;
           reg = reg * sign;
           if(r == 1){
             if(inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD || inst == MOVC){
@@ -210,8 +216,24 @@ int fetch (int inst_index) {
             
           }
           r++;
-          while(!(isdigit(++j)) && j <= s.length());
+          
+          j = rest.find_first_of("0123456789", j + 1);
         }
+      }
+      if (i.get_dest() != ND){
+        cout << inst_index <<": Fetch determined destination to be AR "<< i.get_dest() << endl;
+      } else {
+        cout << inst_index << ": Fetch did not discover a destination" << endl;
+      }
+     if (i.get_srcs(1) != ND){
+        cout << inst_index <<": Fetch determined source 1 to be AR "<< i.get_srcs(1) << endl;
+      } else {
+        cout << inst_index << ": Fetch did not discover a source 1" << endl;
+      }
+      if (i.get_srcs(2) != ND){
+        cout << inst_index <<": Fetch determined source 2 to be AR "<< i.get_srcs(2) << endl;
+      } else {
+        cout << inst_index << ": Fetch did not discover a source 2" << endl;
       }
     }
   }

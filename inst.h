@@ -39,4 +39,5 @@ class Instruction {
     void set_lit(int);
     void create_dependency(int i, int v);
     bool is_valid(int);
+    string printable_inst();
 };
