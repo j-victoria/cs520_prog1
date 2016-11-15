@@ -39,8 +39,9 @@ Register rf[20];
 vector<Instruction> pc_int;
 int memory[1000];
 int fwd_val [9][3]; //where [MEM][0] is the dest. of a fwd'd value resulting from the mem stage
-bool stall [8]; // true if there is a stall in the ith stage
-                //only a stage can write to it's own stall
+bool stall [9]; // true if there is a stall in the ith stage
+                //only a stage can write to its own stall
+                // MV: Changed [8] to [9] so that stall[8] is valid for stall[WB] - stages can be renumbered if necessary? Is 0 in use elsewhere?
 int curr_pc[9];
 int next_pc[9]; //need to scrub at every new 
 
@@ -118,7 +119,10 @@ int main (int argc, char *argv[]) {
 }
 
 
-
+/**
+ * get_inst_from_file
+ * Reads in lines from a text file and ###
+ */
 int get_inst_from_file (const char * file_name){
   ifstream inst_file;
   string inst;
@@ -136,7 +140,10 @@ int get_inst_from_file (const char * file_name){
   return 0;
 }
 
-
+/**
+ * fetch
+ * Simulates the FETCH stage.
+ */
 int fetch (int inst_index) {
   if (squash) { inst_index = ND;}
   if (!(inst_index == ND)){
@@ -260,6 +267,10 @@ int fetch (int inst_index) {
   return 0;
 }
 
+/**
+ * decode
+ * Simulates the D/RF stage.
+ */
 int decode (int i){
   
   if(squash) i = ND;
@@ -494,6 +505,10 @@ int decode (int i){
   return 0;
 } // end decode
 
+/**
+ * beu
+ * Simulates the BRANCH FU stage (the 'branch execution unit').
+ */
 int beu(int i){
   
   if (stall[BEU]){
@@ -552,6 +567,10 @@ int beu(int i){
   return 0;
 }// end beu
 
+/**
+ * alu1
+ * Simulates the INT. ALU1 stage.
+ */
 int alu1 (int i){
   if (stall[ALU1]){
     stall[ALU1] = false;
@@ -600,7 +619,10 @@ int alu1 (int i){
   return 0;
 }// end alu1
 
-
+/**
+ * delay
+ * Simulates the DELAY stage.
+ */
 int delay (int i){
   //
   // :( 
@@ -648,7 +670,10 @@ int delay (int i){
   return 0;
 }//end delay
 
-
+/**
+ * alu2
+ * Simulates the INT. ALU2 stage.
+ */
 int alu2(int i){
   //i'm going to program this assuming we already have a value calculated
   if (stall[ALU2]){
@@ -710,7 +735,10 @@ int alu2(int i){
   return 0;
 }//end alu2
 
-
+/**
+ * mem
+ * Simulates the MEM stage (memory access).
+ */
 int mem(int i){
   if (stall[MEM]){
     stall[MEM] = false;
@@ -748,6 +776,10 @@ int mem(int i){
   return 0;
 }//end mem
 
+/**
+ * wb
+ * Simulates the WB stage (write-back to register file).
+ */
 int wb (int i) {
   if(i != ND){
     fwd_val[MEM][0] = pc_int[i].get_dest();
