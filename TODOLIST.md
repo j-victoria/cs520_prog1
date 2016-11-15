@@ -32,3 +32,5 @@ main(): ~~adjust Clearing out to handle all globals~~
         command processing???
 
 general debugging.
+
+Hi - Fixed the seg fault problem - had to do with me having a fundamental misunderstanding of C++ - which I then discovered and fixed so it is super buggy rn but will not crash (as far as i've determined) - Jay
