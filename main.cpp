@@ -68,6 +68,15 @@ void display_latch(int * latch){
   return;
 }
 
+void display_rf(Register * rf_star){
+  size_t l = sizeof(&rf_star)/sizeof(Register);
+  for (int i = 0; i < l; i++){
+    cout << "AR " << i << ": " << rf_star[i].read_value() << " " << ((rf_star[i].read_valid_bit())?"v":"i") << " " << ((rf_star[i].read_z())?"z":"n") << " ";
+    if (!(i % 4)) cout << endl;
+  }
+  return;
+}
+
 int get_inst_from_file (const char *);
 int fetch (int);
 int decode (int);
@@ -312,6 +321,9 @@ int decode (int i){
     if (stall[DRF]){
       stall[DRF] = false;
       cout << "Decode is stalled..." << endl;
+      if (!(stall[ALU1])){
+        next_pc[ALU1] = ND;
+      }
     }  else {
       cout << i << ": Decode ready to decode!" << endl;
       d.create_dependency(1, ND); d.create_dependency(2, ND);//assume no dependencies   
@@ -326,9 +338,11 @@ int decode (int i){
             d.mark_as_valid(j);
             cout << i <<": Decode read soruce " << j << " from register " << d.get_src_ar(j) << ": " << d.get_srcs(j) << endl;
           } else {
+            cout << i << ": Decode could not find source " << j << " in the register file!" << endl;
             //we have to walk forward through the stages to find the instruction we are  dependant on
             if (pc_int[curr_pc[ALU1]].get_dest() == d.get_src_ar(j)){
               dep = curr_pc[ALU1];
+              
             }else if (pc_int[curr_pc[BEU]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[BEU];
             } else if (pc_int[curr_pc[ALU2]].get_dest() == d.get_src_ar(j)) {
@@ -342,6 +356,7 @@ int decode (int i){
             } else {
               //error case
             }
+            cout << i << ": Decode detected a dependency between " << i << " and " << dep << endl;
             d.create_dependency(j, dep);
             d.mark_as_invalid(j);
           }
@@ -357,20 +372,25 @@ int decode (int i){
       // zero flag stuff!!!
       if (d.get_int() == ADD || d.get_int() == SUB || d.get_int() == MUL){
         z_ptr = i;
+        cout << i << ": decode detected an arithmetic instruction! Arranged zero flag!" << endl;
       }
       if (d.get_int() == BNZ || d.get_int() == BZ){
         if(z_ptr == curr_pc[ALU1]){  
           d.create_dependency(1, z_ptr);
           d.mark_as_invalid(1);
+          cout << i << ": Decode detected a dependency between " << i << " and " << curr_pc[ALU1] << endl;
         } else if (rf[pc_int[z_ptr].get_dest()].read_valid_bit()) {
           d.set_src(1, rf[pc_int[z_ptr].get_dest()].read_z());
           d.mark_as_valid(1);
+          cout << i << ": Decode read the zero flage from AR " << z_ptr << endl;
         } else if(pc_int[curr_pc[ALU2]].get_dest() == z_ptr){
           d.set_src(1, fwd_val[ALU2][1]);
           d.mark_as_valid(1);
+          cout << i << ": Decode read value forwarded from ALU 2!" << endl;
         } else if (pc_int[curr_pc[MEM]].get_dest() == z_ptr){
           d.set_src(1, fwd_val[MEM][1]);
           d.mark_as_valid(1);
+          cout << i << ": Decode read value forwarded from Memory!" << endl;
         }
       }
         
@@ -378,6 +398,7 @@ int decode (int i){
         if (d.get_int() == BAL) {
           d.set_dest(REG_X);
           rf[REG_X].write_valid_bit(false);
+          cout << i << ": Decode marked AR X as invalid!" << endl;
         } //jump's dependency is taken care of above, since X is just a regular register with a special name :/
 
       } // end else stall
@@ -391,10 +412,11 @@ int decode (int i){
       if(stall[BEU]){
         stall[DRF] = true;
         next_pc[DRF] = i;
-
+        cout << i << ": Stall in Brach FU! Cannot move forward!" << endl;
       }else if (d.ready()){
         next_pc[BEU] = i;
-
+        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+        next_pc[DRF] = curr_pc[FETCH];
       }else {
         //where we have a dependency issue.
         // BZ & BNZ - zero flag  JUMP - X register BAL - src 1
@@ -402,57 +424,74 @@ int decode (int i){
           if(fwd_val[ALU2][2] == d.depends(1)){
             d.set_src(1, is_zero(fwd_val[ALU2][1]));
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from ALU 2!" << endl;
           } else if(fwd_val[MEM][2] == d.depends(1)){
             d.set_src(1, is_zero(fwd_val[MEM][1]));
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Memory!" << endl;
           }else if(fwd_val[WB][2] == d.depends(1)){
             d.set_src(1, is_zero(fwd_val[WB][1]));
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Write Back!" << endl;
           } else {
             //we didn't find it :/
             //stall 
             stall[DRF] = true;
             next_pc[DRF] = i;
+            cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else if (di == JUMP){
           if(fwd_val[BEU][2] == d.depends(1)){
             d.set_src(1, fwd_val[BEU][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Breach FU!" << endl;
           } else if (fwd_val[DELAY][2] == d.depends(1)){
             d.set_src(1, fwd_val[DELAY][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Delay!" << endl;
           } else if (fwd_val[MEM][2] == d.depends(1)){
             d.set_src(1, fwd_val[MEM][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Memory!" << endl;
           } else if (fwd_val[WB][2] == d.depends(1)){
             d.set_src(1, fwd_val[WB][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Write Back!" << endl;
           } else {
             //didn't find it :/
             stall[DRF] = true;
             next_pc[DRF] = i;
+            cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else if (di == BAL){
           if(fwd_val[ALU2][2] == d.depends(1)){
             d.set_src(1, fwd_val[ALU2][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from ALU 2!" << endl;
           } else if(fwd_val[MEM][2] == d.depends(1)){
             d.set_src(1, fwd_val[MEM][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Memory!" << endl;
           }else if(fwd_val[WB][2] == d.depends(1)){
             d.set_src(1, fwd_val[WB][1]);
             d.mark_as_valid(1);
+            cout << i << ": Decode read value forwarded from Write Back!" << endl;
           } else {
             //we didn't find it :/
             //stall 
             stall[DRF] = true;
             next_pc[DRF] = i;
+            cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else {
           //error case
-          ;
+          
         }
- 
+        if(d.ready()){
+          next_pc[BEU] = i;
+          cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+          next_pc[DRF] = curr_pc[FETCH];
+        }
       }//end if ! stall
       if (!(stall[ALU1])){
         next_pc[ALU1] = ND;
@@ -464,22 +503,28 @@ int decode (int i){
       if(stall[ALU1]){
         stall[DRF] = true;
         next_pc[DRF] = i;
+        cout << i << ": Stall in ALU 1! Cannot move forward!" << endl;
       } else if(d.is_valid(2)){
         next_pc[ALU1] = i;
+        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
       } else {
         if (fwd_val[ALU2][2] == d.depends(2)){
            d.set_src(2, fwd_val[ALU2][1]);
            d.mark_as_valid(2);
+            cout << i << ": Decode read value forwarded from ALU 2!" << endl;
         } else if (fwd_val[MEM][2] == d.depends(2)){
           d.set_src(2, fwd_val[MEM][1]);
           d.mark_as_valid(2);
+          cout << i << ": Decode read value forwarded from Memory!" << endl;
         } else if (fwd_val[WB][2] == d.depends(2)){
           d.set_src(2, fwd_val[WB][1]);
           d.mark_as_valid(2);
+          cout << i << ": Decode read value forwarded from Write Back!" << endl;
         } else{
           // didn't find it!
           stall[DRF] = true;
           next_pc[DRF] = i;
+          cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
         }
       }
       
@@ -491,33 +536,44 @@ int decode (int i){
       if (stall[ALU1]){
         stall[DRF] = true;
         next_pc[DRF] = i;
+        cout << i << ": Stall in ALU 1! Cannot move forward!" << endl;
       } else if(d.ready()){
         next_pc[ALU1] = i;
+        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+        next_pc[DRF] = curr_pc[FETCH];
       } else {
         for(int p = 1; p <= 2; p ++){
           if (!(d.is_valid(p))){
             if (fwd_val[ALU2][2] == d.depends(p)){
               d.set_src(p, fwd_val[ALU2][1]); 
               d.mark_as_valid(p);
+              cout << i << ": Decode read value forwarded from ALU 2!" << endl;
             }else if (fwd_val[MEM][2] == d.depends(p)) {
               d.set_src(p, fwd_val[MEM][1]);
               d.mark_as_valid(p);
+              cout << i << ": Decode read value forwarded from Memory!" << endl;
             }else if (fwd_val[WB][2] == d.depends(p)) {
               d.set_src(p, fwd_val[WB][1]);
               d.mark_as_valid(p);
+              cout << i << ": Decode read value forwarded from Write Back!" << endl;
             } else {
               //didn't find
               ;
             }//end dependency tree
           }
-          if (d.ready()){
-            next_pc[ALU1] = i;
-          } else {
-            //didn't find one or more source
-            stall[DRF] = true;
-            next_pc[DRF] = i;
-          }//end if
         }
+        if (d.ready()){
+          next_pc[ALU1] = i;
+          cout << i <<": All sources are valid! Issuing instruction " << i << "..." << endl;
+          next_pc[DRF] = curr_pc[FETCH];
+
+        } else {
+          //didn't find one or more source
+          stall[DRF] = true;
+          next_pc[DRF] = i;
+          cout << i << ": Decode could not resolve all sources in time." << endl;
+        }//end if
+        
         if(!(stall[BEU])){
           next_pc[BEU] = ND;
         }
@@ -533,6 +589,7 @@ int decode (int i){
       next_pc[DRF] = i;
     } else {
       next_pc[ALU1] = i;
+      next_pc[DRF] = curr_pc[FETCH];
     } //end !stall 
     if(!(stall[BEU])){
       next_pc[BEU] = ND;
@@ -613,7 +670,7 @@ int alu1 (int i){
   if (stall[ALU1]){
     stall[ALU1] = false;
   }else{
-      if (i != ND){
+      if (i != ND && curr_pc[ALU1] == curr_pc[ALU2]){
         Instruction a = pc_int[i];
         //bitset <12> src1, src2;
         switch (a.get_int()){
@@ -644,7 +701,10 @@ int alu1 (int i){
           case LOAD : 
             a.set_res(a.get_srcs(1) + a.get_lit());
             break;
-    
+          default : 
+            cout << i << ": Nothing to calculate!" << endl;
+            break;
+            
       }//end switch
       pc_int[i] = a;
     } else {cout << "ALU 1 did nothing..." << endl;} // if ! ND
@@ -675,7 +735,13 @@ int delay (int i){
       fwd_val[DELAY][0] = pc_int[i].get_dest();
       fwd_val[DELAY][1] = pc_int[i].get_res();
       fwd_val[DELAY][2] = i;
+      cout << i << ": Forwwarding Value from Delay!" << endl;
+    } else {
+      fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;
     }
+    
+  } else {
+    fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;
   }
   
   
@@ -687,11 +753,14 @@ int delay (int i){
     // i is not ND and there is a stall in MEM
     stall[DELAY] = true;
     next_pc[DELAY] = i;
+    cout << i << ": Memory is stalled! Cannot move forward!" << endl;
   } else if (stall[ALU2]){
     //i is not ND, there is not stall in MEM and there is a stall in ALU2
     next_pc[MEM] = i;
+    cout << i << ": ALU 2 is stalled! "<< i <<" can move forward!" <<endl;
   } else if (curr_pc[ALU2] == ND){
     //i is not ND, there is no stall in MEM or ALU2, and ALU2 has a NOP
+    cout << i<< ": ALU 2 is a NOP! " << i << " can move forward!" << endl;
     next_pc[MEM] = i;
   } else if (i < curr_pc[ALU2]) {
     //neither i nor ALU2 are ND, there are no stalls in ALU or MEM
@@ -699,10 +768,12 @@ int delay (int i){
     next_pc[MEM] = i;
     stall[ALU2] = true;
     next_pc[ALU2] = curr_pc[ALU2];
+    cout << i << ": Delay has a lower line count than ALU 2! Move " << i << " forward. ALU 2 stalls!" << endl;
   } else if (i > curr_pc[ALU2]) {
     //ALU has the lower line number
     stall[DELAY] = true;
     next_pc[DELAY] = i;
+    cout << i << ": ALU 2 has a lower line count than Delay! Move " << curr_pc[ALU2] << " forward. Delay stalls!" << endl;
   }  else {
     //error case
   }
@@ -726,11 +797,13 @@ int alu2(int i){
           fwd_val[ALU2][0] = pc_int[i].get_dest();
           fwd_val[ALU2][1] = pc_int[i].get_res();
           fwd_val[ALU2][2] = i;
+          cout << i << ": Forwarded value from ALU 2!" << endl;;
           break;
         default :
+          fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;
           break;
       }
-    } else {cout << "ALU 2 did nothing..." << endl;}
+    } else {cout << "ALU 2 did nothing..." << endl; fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;}
   }
   //then we deal with STORE
   //STORE is the only instruction that can stall here (out side of you know, there just being a stall somehow)
@@ -746,6 +819,7 @@ int alu2(int i){
           pc_int[i].set_src(1, fwd_val[MEM][1]);
           pc_int[i].mark_as_valid(1);
           next_pc[MEM] = i;
+          
         }
         else if(rf[pc_int[i].get_src_ar(1)].read_valid_bit()){
           pc_int[i].set_src(1, rf[pc_int[i].get_src_ar(1)].read_value());
@@ -759,19 +833,19 @@ int alu2(int i){
         } 
 
       }//end if store not ready
-    }
-  }else {
     
-    //not a store
-    if (stall[MEM]) {
-      //if there's a stall in the next stage & next cycle
-      stall[ALU2] = true;
-      next_pc[ALU2] = i;
-    }else {
-     next_pc[MEM] = i; 
-    }
-  } //end else not store
-  
+    } else {
+
+      //not a store
+      if (stall[MEM]) {
+        //if there's a stall in the next stage & next cycle
+        stall[ALU2] = true;
+        next_pc[ALU2] = i;
+      }else {
+       next_pc[MEM] = i; 
+      }
+    } 
+  }//end else not store
   return 0;
 }//end alu2
 
