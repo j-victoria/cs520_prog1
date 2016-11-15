@@ -62,6 +62,12 @@ int is_zero (int v){
   return (v == 0);
 }
 
+void display_latch(int * latch){
+  cout << "Fetch:" << latch[FETCH] << " Decode:" << latch[DRF] << " ALU 1:" << latch[ALU1] << " ALU2 :" << latch[ALU2] << endl;
+  cout << "Brach FU:" << latch[BEU] << " Delay:" << latch[DELAY] << " Memory:" << latch[MEM] << " Write Back:" << latch[WB] << endl;
+  return;
+}
+
 int get_inst_from_file (const char *);
 int fetch (int);
 int decode (int);
@@ -79,6 +85,7 @@ int main (int argc, char *argv[]) {
   
   string in;
   int rv;
+  //set up globals
   memset(stall, false, sizeof(stall));
   
   for(int i = 0; i < 9; i++){
@@ -88,7 +95,14 @@ int main (int argc, char *argv[]) {
   for (int i = 0; i < 20; i++){
     rf[i].reset();
   }
-
+  
+  squash = false;
+  z_ptr = ND;
+  
+  for(int i = 0; i < WB + 1; i++){
+    fwd_val[i][0] = fwd_val[i][1] = fwd_val[i][2] = ND;
+  }
+  
   in = argv[1];
   cout << "Reading file ..." << cout;
   if (get_inst_from_file(in.c_str()) != 0) {cout << "error opening file" << endl; return 0;}
@@ -101,6 +115,8 @@ int main (int argc, char *argv[]) {
     //acts as latch
     //this is the only time the curr_pc is written to
     memcpy(curr_pc, next_pc, sizeof(curr_pc));
+    
+    display_latch(curr_pc);
 
     rv = wb(curr_pc[WB]); assert (rv == 0);
     rv = mem(curr_pc[MEM]); assert (rv == 0);
@@ -109,8 +125,10 @@ int main (int argc, char *argv[]) {
     rv = alu1(curr_pc[ALU1]); assert (rv == 0);
     rv = beu(curr_pc[BEU]); assert (rv == 0);
     rv = decode(curr_pc[DRF]); assert (rv == 0);
+    //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
     rv = fetch(curr_pc[FETCH]);
-
+    //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
+    
     cin.ignore();
 
   }while (rv != EOP);
@@ -145,25 +163,28 @@ int get_inst_from_file (const char * file_name){
  * Simulates the FETCH stage.
  */
 int fetch (int inst_index) {
-  if (squash) { inst_index = ND;}
-  if (!(inst_index == ND)){
-    if (stall[FETCH]){
-      stall[FETCH] = false;
-    } else {
+  if (squash) { inst_index = ND; cout << "Fetch is squashed " << endl;} 
+  
+  if (stall[FETCH]){
+    stall[FETCH] = false;
+    cout << "Stall in Fetch" << endl;
+  } else {
+    if (!(inst_index == ND)){
       Instruction i = pc_int[inst_index];
       string s = i.get_name();
 
       i.set_inst(s.substr(0, s.find(" ")));
       cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
       string rest = s.substr(s.find(" "), s.length() - 1);
-      
-      cout << rest << endl;
-      
+
+      //cout << rest << endl;
+
       if (i.get_int() == JUMP){
         // handle special case here
       } else {
-        
-        
+
+
+
         int j = 0, r = 1;
         instructions_t inst = i.get_int();
 
@@ -171,18 +192,18 @@ int fetch (int inst_index) {
         i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
         //this should make decode slightly easier
 
-        
+
         j = rest.find_first_of("0123456789", j + 1);
         while (j < rest.length()){
           int reg = 0;
           int sign = 1;
           if (rest[j - 1] == '-') sign = -1;
-  
+
           while ( isdigit( rest[j] ) ) {
             reg = reg * 10 + ((int) rest[j] - 48);
             j++;
           }
-          cout << "val :" << reg << endl;
+          //cout << "val :" << reg << endl;
           reg = reg * sign;
           if(r == 1){
             if(inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD || inst == MOVC){
@@ -206,6 +227,8 @@ int fetch (int inst_index) {
             } else if (inst == STORE) {
               i.set_src_ar(2, reg);
             }else if (inst == MOVC || inst == JUMP || inst == BAL){
+              //
+
               i.set_lit(reg);
             }else {
               // error case
@@ -220,10 +243,10 @@ int fetch (int inst_index) {
             } else {
               //error case
             }
-            
+
           }
           r++;
-          
+
           j = rest.find_first_of("0123456789", j + 1);
         }
       }
@@ -232,18 +255,24 @@ int fetch (int inst_index) {
       } else {
         cout << inst_index << ": Fetch did not discover a destination" << endl;
       }
-     if (i.get_srcs(1) != ND){
-        cout << inst_index <<": Fetch determined source 1 to be AR "<< i.get_srcs(1) << endl;
+     if (i.get_src_ar(1) != ND){
+        cout << inst_index <<": Fetch determined source 1 to be AR "<< i.get_src_ar(1) << endl;
       } else {
         cout << inst_index << ": Fetch did not discover a source 1" << endl;
       }
-      if (i.get_srcs(2) != ND){
-        cout << inst_index <<": Fetch determined source 2 to be AR "<< i.get_srcs(2) << endl;
+      if (i.get_src_ar(2) != ND){
+        cout << inst_index <<": Fetch determined source 2 to be AR "<< i.get_src_ar(2) << endl;
       } else {
         cout << inst_index << ": Fetch did not discover a source 2" << endl;
       }
-    }
-  }
+      if (i.get_lit() != ND){
+        cout << inst_index <<": Fetch determined literal to be "<< i.get_lit() << endl;
+      } else {
+        cout << inst_index << ": Fetch did not discover a literal" << endl;
+      }
+    pc_int[inst_index] = i;
+    } else {cout << "Fetch did nothing..." << endl;} // end if nd
+  }// end if stall
   
   
   
@@ -273,7 +302,7 @@ int fetch (int inst_index) {
  */
 int decode (int i){
   
-  if(squash) i = ND;
+  if(squash) {i = ND; cout << "Decode is squashed" << endl;}
   
   if (i != ND){
     
@@ -282,15 +311,20 @@ int decode (int i){
     
     if (stall[DRF]){
       stall[DRF] = false;
+      cout << "Decode is stalled..." << endl;
     }  else {
-      
-      d.create_dependency(1, ND); d.create_dependency(2, ND);//assume no dependencies     
+      cout << i << ": Decode ready to decode!" << endl;
+      d.create_dependency(1, ND); d.create_dependency(2, ND);//assume no dependencies   
+      d.mark_as_valid(1); d.mark_as_valid(2);
       int dep;
-      for (int j; j = 1; j < 3){
+      for (int j = 1; j < 3; j++){
         if (d.get_src_ar(j) != ND){
+          cout << i << ": Decode detected a source! AR " << d.get_src_ar(j) << endl;
+          
           if (rf[d.get_src_ar(j)].read_valid_bit()){
             d.set_src(j, rf[d.get_src_ar(j)].read_value());
             d.mark_as_valid(j);
+            cout << i <<": Decode read soruce " << j << " from register " << d.get_src_ar(j) << ": " << d.get_srcs(j) << endl;
           } else {
             //we have to walk forward through the stages to find the instruction we are  dependant on
             if (pc_int[curr_pc[ALU1]].get_dest() == d.get_src_ar(j)){
@@ -311,12 +345,14 @@ int decode (int i){
             d.create_dependency(j, dep);
             d.mark_as_invalid(j);
           }
-        } else {d.set_src(j, ND); d.mark_as_valid(j);}
+        } else {d.set_src(j, ND); d.mark_as_valid(j); cout << i << ": No source " << j << " to retreive" << endl;}
       }
       if (d.get_dest() != ND){
         //mark destination register as invalid
+        cout << i << ": Writing valid bit..." << endl;
         rf[d.get_dest()].write_valid_bit(false);
-      }
+        cout << i << ": Decode marked AR " << d.get_dest() << " as invaild" << endl;
+      } else {cout << i << ": No destination to mark..." << endl;}
       
       // zero flag stuff!!!
       if (d.get_int() == ADD || d.get_int() == SUB || d.get_int() == MUL){
@@ -485,11 +521,12 @@ int decode (int i){
         if(!(stall[BEU])){
           next_pc[BEU] = ND;
         }
-      }//end switch
+      }//end 
 
-    }//end ! ND
-     
+    }//end switch
+  pc_int[i] = d;   
   } else {  // nop 
+    cout << "Decode did nothing ..." << endl;
     if (stall[DRF]) stall[DRF] = false;
     if (stall[ALU1]){
       stall[DRF] = true;
@@ -556,7 +593,8 @@ int beu(int i){
         fwd_val[BEU][2] = i;
       }
       
-    } else { squash = false;} // end if ! ND
+    pc_int[i] = b;
+    } else { squash = false; cout << "BEU did nothing..." << endl;} // end if ! ND
   }//end ! stall
   if (stall[DELAY]){
     stall[BEU] = true;
@@ -608,7 +646,8 @@ int alu1 (int i){
             break;
     
       }//end switch
-    } // if ! ND
+      pc_int[i] = a;
+    } else {cout << "ALU 1 did nothing..." << endl;} // if ! ND
   }//end else stall
   if (stall[ALU2]){
     stall[ALU1] = true;
@@ -642,6 +681,7 @@ int delay (int i){
   
   
   if(i == ND){
+    cout << "Delay did nothing..." << endl;
     //allow alu2 to go through
   } else if (stall[MEM]) {
     // i is not ND and there is a stall in MEM
@@ -690,7 +730,7 @@ int alu2(int i){
         default :
           break;
       }
-    }
+    } else {cout << "ALU 2 did nothing..." << endl;}
   }
   //then we deal with STORE
   //STORE is the only instruction that can stall here (out side of you know, there just being a stall somehow)
@@ -759,7 +799,7 @@ int mem(int i){
       fwd_val[MEM][0] = pc_int[i].get_dest();
       fwd_val[MEM][1] = pc_int[i].get_res();
       fwd_val[MEM][2] = i;
-    }
+    } else {cout << "Memory did nothing..." << endl;}
     
     
   }
@@ -793,7 +833,7 @@ int wb (int i) {
       return EOP;
     }  
   
-  }
+  } else {cout << "Write Back did nothing..." << endl;}
     
     
   
