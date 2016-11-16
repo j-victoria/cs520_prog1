@@ -48,6 +48,7 @@ int next_pc[9]; //need to scrub at every new
 bool squash;  //when true: fetch and decode are not executed 
 int z_ptr;    //points to the instrucion that last affected the Z 
 
+bool dirty_latch[9]; // records whether the latch has been written to this cycle true if written false if not
 
 //functions
 int access_memory_at (int i){
@@ -73,6 +74,15 @@ void display_rf(Register * rf_star){
   for (int i = 0; i < l; i++){
     cout << "AR " << i << ": " << rf_star[i].read_value() << " " << ((rf_star[i].read_valid_bit())?"v":"i") << " " << ((rf_star[i].read_z())?"z":"n") << " ";
     if (!(i % 4)) cout << endl;
+  }
+  return;
+}
+
+void clean_up(){
+  for (int i = FETCH; i < WB + 1; i++){
+    if(!(dirty_latch[i])){
+      
+    }
   }
   return;
 }
