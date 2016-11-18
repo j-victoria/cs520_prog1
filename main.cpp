@@ -50,6 +50,8 @@ int z_ptr;    //points to the instrucion that last affected the Z
 
 bool dirty_latch[9]; // records whether the latch has been written to this cycle true if written false if not
 
+bool debug;
+
 //functions
 int access_memory_at (int i){
   return memory[i/4];
@@ -78,11 +80,20 @@ void display_rf(Register * rf_star){
   return;
 }
 
+void print_mem(int max){
+  for (int i = 0; i < (max/4); i++){
+    cout << i * 4 << ": " << memory[i] << " ";
+    if(!(i % 8)) cout << endl;
+  }
+    
+}
+
 void clean_up(){
   for (int i = FETCH; i < WB + 1; i++){
     if(!(dirty_latch[i])){
-      
+      next_pc[i] = ND;
     }
+    dirty_latch[i] = false;
   }
   return;
 }
@@ -100,10 +111,14 @@ int wb (int);
 //main
 int main (int argc, char *argv[]) {
   
-  
+  if (argc > 2){
+    if (argv[2])
+    debug = (argv[2] == "d");
+  } else debug = false;
   
   string in;
   int rv;
+  int n;
   //set up globals
   memset(stall, false, sizeof(stall));
   
@@ -126,32 +141,47 @@ int main (int argc, char *argv[]) {
   cout << "Reading file ..." << cout;
   if (get_inst_from_file(in.c_str()) != 0) {cout << "error opening file" << endl; return 0;}
   cout << "There are " << pc_int.size() << " instructions in " << in  << endl;
-  cout << "Starting exectution [enter to go through a cycle]..." << endl;
   memset(next_pc, -1, sizeof(next_pc));
   next_pc[FETCH] = 0;
+  int wbrv;
   do{
-    //copy the new pc addresses into the current pc addr buffer
-    //acts as latch
-    //this is the only time the curr_pc is written to
-    memcpy(curr_pc, next_pc, sizeof(curr_pc));
-    
-    display_latch(curr_pc);
+    cout << "Pick a mode Initilize, Simulate, or Display: ";
+    getline(cin, in);
+    if (in.compare("Simulate") == 0){
+      cout << "Starting exectution..." << endl;
+      int j = in.find_first_of("0123456789", 0);
+      int cycles = 0;
+      do{
+        cycles = cycles * 10 +  ((int) in[j] - 48);
+      }while(isdigit(in[++j]));
+      do{
+        //copy the new pc addresses into the current pc addr buffer
+        //acts as latch
+        //this is the only time the curr_pc is written to
+        memcpy(curr_pc, next_pc, sizeof(curr_pc));
 
-    rv = wb(curr_pc[WB]); assert (rv == 0);
-    rv = mem(curr_pc[MEM]); assert (rv == 0);
-    rv = alu2(curr_pc[ALU2]); assert (rv == 0);
-    rv = delay(curr_pc[DELAY]); assert (rv == 0);
-    rv = alu1(curr_pc[ALU1]); assert (rv == 0);
-    rv = beu(curr_pc[BEU]); assert (rv == 0);
-    rv = decode(curr_pc[DRF]); assert (rv == 0);
-    //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
-    rv = fetch(curr_pc[FETCH]);
-    //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
-    
-    cin.ignore();
+        display_latch(curr_pc);
 
-  }while (rv != EOP);
-    
+        wbrv = wb(curr_pc[WB]); assert (wbrv == 0);
+        rv = mem(curr_pc[MEM]); assert (rv == 0);
+        rv = alu2(curr_pc[ALU2]); assert (rv == 0);
+        rv = delay(curr_pc[DELAY]); assert (rv == 0);
+        rv = alu1(curr_pc[ALU1]); assert (rv == 0);
+        rv = beu(curr_pc[BEU]); assert (rv == 0);
+        rv = decode(curr_pc[DRF]); assert (rv == 0);
+        //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
+        rv = fetch(curr_pc[FETCH]);
+        //cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
+
+        clean_up();
+        //cin.ignore();
+
+      }while (n++ < cycles);
+      n = 0;
+    } else if (in.compare("Initilize")) {
+      
+    }
+  }while (true);
   return 0;
 }
 
@@ -198,8 +228,14 @@ int fetch (int inst_index) {
 
       //cout << rest << endl;
 
-      if (i.get_int() == JUMP){
+      if (i.get_int() == JUMP && rest.find("X", 0) != string::npos){
         // handle special case here
+
+        i.set_dest(ND); 
+        i.set_src_ar(1, REG_X);
+        i.set_src_ar(2, ND);
+        
+
       } else {
 
 
@@ -294,22 +330,28 @@ int fetch (int inst_index) {
   }// end if stall
   
   
-  
-  if (stall[DRF]){
-    stall[FETCH]= true;
-    next_pc[FETCH] = inst_index;
-  }else {
-    next_pc[DRF] = inst_index;
-  }
-  
+  //maybe combine these?
   if (squash){
     squash = false;
+  } else if (stall[DRF]){
+    //not squashed but drfis stalled
+    stall[FETCH]= true;
+    next_pc[FETCH] = inst_index;
+    dirty_latch[FETCH] = true;
   } else if (inst_index + 1 >= pc_int.size()) { // need to prevent ourselves from going over the edge
+    //drf is not stalled, but instruction is the last line in the file
     next_pc[FETCH] = ND;
+    dirty_latch[FETCH] = true;
   } else if (inst_index == ND){
+    //no stall, not squashed, i = ND
     next_pc[FETCH] = ND;
-  } else {
+    dirty_latch[FETCH] = true;
+  } else  {
+    //No stall, not squashed, the next sequential instruction exists, and i != ND
     next_pc[FETCH] = inst_index + 1;
+    dirty_latch[FETCH] = true;
+    next_pc[DRF] = inst_index;
+    dirty_latch[DRF] = true;
   }
   
   return 0;
@@ -331,9 +373,7 @@ int decode (int i){
     if (stall[DRF]){
       stall[DRF] = false;
       cout << "Decode is stalled..." << endl;
-      if (!(stall[ALU1])){
-        next_pc[ALU1] = ND;
-      }
+
     }  else {
       cout << i << ": Decode ready to decode!" << endl;
       d.create_dependency(1, ND); d.create_dependency(2, ND);//assume no dependencies   
@@ -417,16 +457,18 @@ int decode (int i){
     int p;
     
     //issusing 
-   instructions_t di;
+   instructions_t di = d.get_int();
     if (di == BAL || di == JUMP || di == BZ || di == BNZ){
+      cout << i << ": Evaluating branch execution readiness" << endl;
       if(stall[BEU]){
         stall[DRF] = true;
         next_pc[DRF] = i;
         cout << i << ": Stall in Brach FU! Cannot move forward!" << endl;
+        dirty_latch[DRF] = true;
       }else if (d.ready()){
         next_pc[BEU] = i;
-        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
-        next_pc[DRF] = curr_pc[FETCH];
+        cout << i <<": All sources are valid! Issuing instruction " << i << " to Branch FU" << endl;
+        dirty_latch[BEU] = true;
       }else {
         //where we have a dependency issue.
         // BZ & BNZ - zero flag  JUMP - X register BAL - src 1
@@ -448,6 +490,7 @@ int decode (int i){
             //stall 
             stall[DRF] = true;
             next_pc[DRF] = i;
+            dirty_latch[DRF] = true;
             cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else if (di == JUMP){
@@ -471,6 +514,7 @@ int decode (int i){
             //didn't find it :/
             stall[DRF] = true;
             next_pc[DRF] = i;
+            dirty_latch[DRF] = true;
             cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else if (di == BAL){
@@ -491,6 +535,7 @@ int decode (int i){
             //stall 
             stall[DRF] = true;
             next_pc[DRF] = i;
+            dirty_latch[DRF] = true;
             cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
           }
         } else {
@@ -499,12 +544,15 @@ int decode (int i){
         }
         if(d.ready()){
           next_pc[BEU] = i;
-          cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+          dirty_latch[BEU] = true;
+          cout << i <<": All sources are valid! Issuing instruction " << i << " to Branch FU" << endl;
           next_pc[DRF] = curr_pc[FETCH];
+          dirty_latch[DRF] = true;
         }
       }//end if ! stall
       if (!(stall[ALU1])){
         next_pc[ALU1] = ND;
+        dirty_latch[ALU1] = true;
       }//end if ! stall
 
     } else if (di == STORE){
@@ -513,10 +561,12 @@ int decode (int i){
       if(stall[ALU1]){
         stall[DRF] = true;
         next_pc[DRF] = i;
+        dirty_latch[DRF] = true;
         cout << i << ": Stall in ALU 1! Cannot move forward!" << endl;
       } else if(d.is_valid(2)){
         next_pc[ALU1] = i;
-        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+        dirty_latch[ALU1] = true;
+        cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
       } else {
         if (fwd_val[ALU2][2] == d.depends(2)){
            d.set_src(2, fwd_val[ALU2][1]);
@@ -534,23 +584,28 @@ int decode (int i){
           // didn't find it!
           stall[DRF] = true;
           next_pc[DRF] = i;
+          dirty_latch[DRF] = true;
           cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
         }
       }
       
       if(!(stall[BEU])){
         next_pc[BEU] = ND;
+        dirty_latch[BEU] = true;
       }
       
     } else {  //reg-to-reg,, load & halt 
       if (stall[ALU1]){
         stall[DRF] = true;
         next_pc[DRF] = i;
+        dirty_latch[DRF] = true;
         cout << i << ": Stall in ALU 1! Cannot move forward!" << endl;
       } else if(d.ready()){
         next_pc[ALU1] = i;
-        cout << i <<": All sources are valid! Issuing instruction..." << i << endl;
+        dirty_latch[ALU1] = true;
+        cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
         next_pc[DRF] = curr_pc[FETCH];
+        dirty_latch[DRF] = true;
       } else {
         for(int p = 1; p <= 2; p ++){
           if (!(d.is_valid(p))){
@@ -570,26 +625,31 @@ int decode (int i){
               //didn't find
               ;
             }//end dependency tree
-          }
-        }
-        if (d.ready()){
-          next_pc[ALU1] = i;
-          cout << i <<": All sources are valid! Issuing instruction " << i << "..." << endl;
-          next_pc[DRF] = curr_pc[FETCH];
+          }//end p ! valid
+        } //end for
+      }//end inst not ready
+      if (d.ready() && !(stall[ALU1]) && (d.get_int() != BNZ || d.get_int() != BZ || d.get_int() != JUMP || d.get_int() != BAL)){
+        next_pc[ALU1] = i;
+        dirty_latch[ALU1] = true;
+        cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1!" << endl;
+        next_pc[DRF] = curr_pc[FETCH];
+        dirty_latch[DRF] = true;
 
-        } else {
-          //didn't find one or more source
-          stall[DRF] = true;
-          next_pc[DRF] = i;
-          cout << i << ": Decode could not resolve all sources in time." << endl;
-        }//end if
-        
-        if(!(stall[BEU])){
-          next_pc[BEU] = ND;
-        }
-      }//end 
+      } else {
+        //didn't find one or more source
+        stall[DRF] = true;
+        next_pc[DRF] = i;
+        dirty_latch[DRF] = true;
+        cout << i << ": Decode could not resolve all sources in time." << endl;
+      }//end if
 
-    }//end switch
+      if(!(stall[BEU])){
+        next_pc[BEU] = ND;
+        dirty_latch[BEU] = true;
+      }
+    }//end if reg-to-reg
+
+   
   pc_int[i] = d;   
   } else {  // nop 
     cout << "Decode did nothing ..." << endl;
@@ -597,12 +657,16 @@ int decode (int i){
     if (stall[ALU1]){
       stall[DRF] = true;
       next_pc[DRF] = i;
+      dirty_latch[DRF] = true;
     } else {
       next_pc[ALU1] = i;
+      dirty_latch[ALU1] = true;
       next_pc[DRF] = curr_pc[FETCH];
+      dirty_latch[DRF] = true;
     } //end !stall 
     if(!(stall[BEU])){
       next_pc[BEU] = ND;
+      dirty_latch[BEU] = true;
     } //end if !stall beu
   }// end if = ND
   
@@ -646,11 +710,15 @@ int beu(int i){
           break;
       }//end switch
       if (branch = true){
+        cout << i << ": Decided to take a branch! Branch target: " << b.get_res() << endl;
         next_pc[DRF] = ND;
+        dirty_latch[DRF] = true;
         next_pc[FETCH] = b.get_res();
+        dirty_latch[FETCH] = true;
         squash = true;
       }else{
         squash = false;
+        cout << i << ": Decided to not take a branch!" << endl;
       }// end if branch 
       
       if (b.get_int() == BAL){
@@ -666,8 +734,10 @@ int beu(int i){
   if (stall[DELAY]){
     stall[BEU] = true;
     next_pc[BEU] = i;
+    dirty_latch[BEU] = true;
   } else {
     next_pc[DELAY] = i;
+    dirty_latch[DELAY] = true;
   }//end else stall
   return 0;
 }// end beu
@@ -686,30 +756,38 @@ int alu1 (int i){
         switch (a.get_int()){
           case ADD :
             a.set_res(a.get_srcs(1) + a.get_srcs(2));
+            cout << i << ": ALU1 is calculating addition!" << endl;
             break;
           case SUB : 
             a.set_res(a.get_srcs(1) - a.get_srcs(2));
+            cout << i << ": ALU1 is calculating subtraction!" << endl;
             break;
           case MUL :
             a.set_res(a.get_srcs(1) * a.get_srcs(2));
+            cout << i << ": ALU1 is calculating multiplication!" << endl;
             break;
           case MOVC :
             a.set_res(a.get_lit());
             break;
           case AND :
             a.set_res((int)(bitset<12>(a.get_srcs(1)) & bitset<12>(a.get_srcs(2))).to_ulong());
+            cout << i << ": ALU1 is calculating an and!" << endl;
             break;
           case OR :
             a.set_res((int)(bitset<12>(a.get_srcs(1)) | bitset<12>(a.get_srcs(2))).to_ulong());
+            cout << i << ": ALU1 is calculating an or!" << endl;
             break;
           case EX_OR :
             a.set_res((int)(bitset<12>(a.get_srcs(1)) ^ bitset<12>(a.get_srcs(2))).to_ulong());
+            cout << i << ": ALU1 is calculating! an xor" << endl;
             break;
           case STORE :
             a.set_res(a.get_srcs(2) + a.get_lit());
-              break;
+            cout << i << ": ALU1 is calculating an address offset!" << endl;
+            break;
           case LOAD : 
             a.set_res(a.get_srcs(1) + a.get_lit());
+            cout << i << ": ALU1 is calculating an address offset!" << endl;
             break;
           default : 
             cout << i << ": Nothing to calculate!" << endl;
@@ -722,8 +800,10 @@ int alu1 (int i){
   if (stall[ALU2]){
     stall[ALU1] = true;
     next_pc[ALU1] = i;
+    dirty_latch[ALU1] = true;
   } else {
     next_pc[ALU2] = i;
+    dirty_latch[ALU2] = true;
   }
   return 0;
 }// end alu1
@@ -763,26 +843,32 @@ int delay (int i){
     // i is not ND and there is a stall in MEM
     stall[DELAY] = true;
     next_pc[DELAY] = i;
+    dirty_latch[DELAY] = true;
     cout << i << ": Memory is stalled! Cannot move forward!" << endl;
   } else if (stall[ALU2]){
     //i is not ND, there is not stall in MEM and there is a stall in ALU2
     next_pc[MEM] = i;
+    dirty_latch[MEM] = true;
     cout << i << ": ALU 2 is stalled! "<< i <<" can move forward!" <<endl;
   } else if (curr_pc[ALU2] == ND){
     //i is not ND, there is no stall in MEM or ALU2, and ALU2 has a NOP
     cout << i<< ": ALU 2 is a NOP! " << i << " can move forward!" << endl;
     next_pc[MEM] = i;
+    dirty_latch[MEM] = true;
   } else if (i < curr_pc[ALU2]) {
     //neither i nor ALU2 are ND, there are no stalls in ALU or MEM
     //we let the lower line # go through
     next_pc[MEM] = i;
+    dirty_latch[MEM] = true;
     stall[ALU2] = true;
     next_pc[ALU2] = curr_pc[ALU2];
+    dirty_latch[ALU2] = true;
     cout << i << ": Delay has a lower line count than ALU 2! Move " << i << " forward. ALU 2 stalls!" << endl;
   } else if (i > curr_pc[ALU2]) {
     //ALU has the lower line number
     stall[DELAY] = true;
     next_pc[DELAY] = i;
+    dirty_latch[DELAY] = true;
     cout << i << ": ALU 2 has a lower line count than Delay! Move " << curr_pc[ALU2] << " forward. Delay stalls!" << endl;
   }  else {
     //error case
@@ -804,6 +890,7 @@ int alu2(int i){
       //first we forward the caluculated data
       switch (pc_int[i].get_int()){
         case ADD : case SUB : case MUL : case AND : case OR : case EX_OR : case MOVC :
+          cout << i << ": ALU2 finished calculating the result!" << endl;
           fwd_val[ALU2][0] = pc_int[i].get_dest();
           fwd_val[ALU2][1] = pc_int[i].get_res();
           fwd_val[ALU2][2] = i;
@@ -822,6 +909,7 @@ int alu2(int i){
     if (pc_int[i].get_int() == STORE){
       if (pc_int[i].ready()){
         next_pc[MEM] = i;
+        dirty_latch[MEM] = true;
       }else {
 
         if (fwd_val[MEM][0] == pc_int[i].get_dest() && fwd_val[MEM][2] == pc_int[i].depends(1)){
@@ -829,17 +917,20 @@ int alu2(int i){
           pc_int[i].set_src(1, fwd_val[MEM][1]);
           pc_int[i].mark_as_valid(1);
           next_pc[MEM] = i;
+          dirty_latch[MEM] = true;
           
         }
         else if(rf[pc_int[i].get_src_ar(1)].read_valid_bit()){
           pc_int[i].set_src(1, rf[pc_int[i].get_src_ar(1)].read_value());
           pc_int[i].mark_as_valid(1);
           next_pc[MEM] = i;
+          dirty_latch[MEM] = true;
         }
         else {
           //didn't find the value in time
           stall[ALU2] = true;
           next_pc[ALU2] = i;
+          dirty_latch[ALU2] = true;
         } 
 
       }//end if store not ready
@@ -851,8 +942,10 @@ int alu2(int i){
         //if there's a stall in the next stage & next cycle
         stall[ALU2] = true;
         next_pc[ALU2] = i;
+         dirty_latch[ALU2] = true;
       }else {
        next_pc[MEM] = i; 
+       dirty_latch[MEM] = true;
       }
     } 
   }//end else not store
@@ -883,7 +976,7 @@ int mem(int i){
       fwd_val[MEM][0] = pc_int[i].get_dest();
       fwd_val[MEM][1] = pc_int[i].get_res();
       fwd_val[MEM][2] = i;
-    } else {cout << "Memory did nothing..." << endl;}
+    } else {cout << "Memory did nothing..." << endl;fwd_val[MEM][0] = fwd_val[MEM][1] = fwd_val[MEM][2] = ND;}
     
     
   }
@@ -893,9 +986,11 @@ int mem(int i){
     //it will already know if there is going to be a stall in the next cycle
     stall[MEM] = true;
     next_pc[MEM] = i;
+    dirty_latch[MEM] = true;
   } else {
     //since nothing (at least in this sim) can block in mem, these are the only two cases we have to deal with
     next_pc[WB] = i;
+    dirty_latch[WB] = true;
   }
   return 0;
 }//end mem
@@ -912,12 +1007,13 @@ int wb (int i) {
     if  (pc_int[i].get_dest() != ND) {
       rf[pc_int[i].get_dest()].write_value(pc_int[i].get_res());
       rf[pc_int[i].get_dest()].write_valid_bit(true);
+      cout << i << ": WB wrote the result " << pc_int[i].get_res() << " to AR " << pc_int[i].get_dest() << endl;
       }
     if(pc_int[i].get_int() == HALT){
       return EOP;
     }  
   
-  } else {cout << "Write Back did nothing..." << endl;}
+  } else {cout << "Write Back did nothing..." << endl;fwd_val[WB][0] = fwd_val[WB][1] = fwd_val[WB][2] = ND;}
     
     
   

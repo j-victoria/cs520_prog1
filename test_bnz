@@ -1,0 +1,7 @@
+MOVC R1, #10
+MOVC R2, #5
+MOVC R3, #1
+SUB R1, R1, R3
+SUB R5, R1, R2
+BNZ #-8
+HALT 
