@@ -53,13 +53,7 @@ bool dirty_latch[9]; // records whether the latch has been written to this cycle
 bool debug;
 
 //functions
-int access_memory_at (int i){
-  return memory[i/4];
-}
 
-int write_to_mem (int i, int v){
-  memory[i/4] = v;
-}
 
 int is_zero (int v){
   return (v == 0);
@@ -210,23 +204,26 @@ int main (int argc, char *argv[]) {
         if (debug) display_latch(curr_pc);
 
         wbrv = wb(curr_pc[WB]); 
-        rv = mem(curr_pc[MEM]); assert (rv == 0);
-        rv = alu2(curr_pc[ALU2]); assert (rv == 0);
-        rv = delay(curr_pc[DELAY]); assert (rv == 0);
-        rv = alu1(curr_pc[ALU1]); assert (rv == 0);
-        rv = beu(curr_pc[BEU]); assert (rv == 0);
-        rv = decode(curr_pc[DRF]); assert (rv == 0);
-        //if (debug) cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
-        rv = fetch(curr_pc[FETCH]);
-        //if (debug) cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
-
+        if (wbrv == 0){
+          rv = mem(curr_pc[MEM]); assert (rv == 0);
+          rv = alu2(curr_pc[ALU2]); assert (rv == 0);
+          rv = delay(curr_pc[DELAY]); assert (rv == 0);
+          rv = alu1(curr_pc[ALU1]); assert (rv == 0);
+          rv = beu(curr_pc[BEU]); assert (rv == 0);
+          rv = decode(curr_pc[DRF]); assert (rv == 0);
+          //if (debug) cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
+          rv = fetch(curr_pc[FETCH]);
+          //if (debug) cout << pc_int[curr_pc[FETCH]].get_src_ar(1) << endl;
+        }
         clean_up();
         //cin.ignore();
         if (debug) cout << "Completed " << n << " cycles "<< endl;
       }while (n++ < cycles && wbrv == 0);
       cout << "Completed " << n - 1 << " cycles "<< endl;
       n = 1;
-    
+      if (wbrv == EOP){
+        memset(next_pc, -1, sizeof(next_pc));
+      }
     } else {
       cout << "unexpected input. exiting." << endl;
       exit(0);
@@ -274,8 +271,10 @@ int fetch (int inst_index) {
 
       i.set_inst(s.substr(0, s.find(" ")));
       if (debug) cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
-      string rest = s.substr(s.find(" "), s.length() - 1);
-
+      string rest;
+      if (i.get_int() != HALT){
+        rest = s.substr(s.find(" "), s.length() - 1);
+      }
       //if (debug) cout << rest << endl;
 
       if (i.get_int() == JUMP && rest.find("X", 0) != string::npos){
@@ -284,8 +283,22 @@ int fetch (int inst_index) {
         i.set_dest(ND); 
         i.set_src_ar(1, REG_X);
         i.set_src_ar(2, ND);
-        
+        int j = rest.find_first_of("0123456789", 0);
+        int reg = 0;
+        int sign = 1;
+        if (rest[j - 1] == '-') sign = -1;
 
+        while ( isdigit( rest[j] ) ) {
+          reg = reg * 10 + ((int) rest[j] - 48);
+          j++;
+        }
+        //if (debug) cout << "val :" << reg << endl;
+        reg = reg * sign;
+        i.set_lit(reg);
+        
+      } else if (i.get_int() == HALT){
+        i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
+        
       } else {
 
         if (debug) cout << inst_index << ": No special case "<< endl;
@@ -619,17 +632,26 @@ int decode (int i){
         if (debug) cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
       } else {
         if (fwd_val[ALU2][2] == d.depends(2)){
-           d.set_src(2, fwd_val[ALU2][1]);
-           d.mark_as_valid(2);
-            if (debug) cout << i << ": Decode read value forwarded from ALU 2!" << endl;
+          d.set_src(2, fwd_val[ALU2][1]);
+          d.mark_as_valid(2);
+          if (debug) cout << i << ": Decode read value forwarded from ALU 2!" << endl;
+          next_pc[ALU1] = i;
+          dirty_latch[ALU1] = true;
+          if (debug) cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
         } else if (fwd_val[MEM][2] == d.depends(2)){
           d.set_src(2, fwd_val[MEM][1]);
           d.mark_as_valid(2);
           if (debug) cout << i << ": Decode read value forwarded from Memory!" << endl;
+          next_pc[ALU1] = i;
+          dirty_latch[ALU1] = true;
+          if (debug) cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
         } else if (fwd_val[WB][2] == d.depends(2)){
           d.set_src(2, fwd_val[WB][1]);
           d.mark_as_valid(2);
           if (debug) cout << i << ": Decode read value forwarded from Write Back!" << endl;
+          next_pc[ALU1] = i;
+          dirty_latch[ALU1] = true;
+          if (debug) cout << i <<": All sources are valid! Issuing instruction " << i << " to ALU 1" << endl;
         } else{
           // didn't find it!
           stall[DRF] = true;
@@ -638,7 +660,16 @@ int decode (int i){
           if (debug) cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
         }
       }
-      
+      if (fwd_val[ALU2][2] == d.depends(1)){
+        d.set_src(1, fwd_val[ALU2][1]);
+        d.mark_as_valid(1);
+      } else if (fwd_val[MEM][2] == d.depends(1)){
+        d.set_src(1, fwd_val[MEM][1]);
+        d.mark_as_valid(1);
+      } else if(fwd_val[WB][2] == d.depends(2)) {
+        d.set_src(1, fwd_val[WB][1]);
+        d.mark_as_valid(1);
+      }//end if
       if(!(stall[BEU])){
         next_pc[BEU] = ND;
         dirty_latch[BEU] = true;
@@ -704,7 +735,9 @@ int decode (int i){
   } else {  // nop 
     if (debug) cout << "Decode did nothing ..." << endl;
     if (stall[DRF]) stall[DRF] = false;
-    if (stall[ALU1]){
+    if (squash){
+      
+    }else if (stall[ALU1]){
       stall[DRF] = true;
       next_pc[DRF] = i;
       dirty_latch[DRF] = true;
@@ -751,12 +784,12 @@ int beu(int i){
           }//end if
           break;
         case JUMP : 
-          b.set_res((b.get_srcs(1) + b.get_lit())/4);
+          b.set_res(((b.get_srcs(1) - 4000) + b.get_lit())/4);
           branch = true;
           break;
         case BAL :
           //have to set up stufff;-;
-          b.set_res((b.get_srcs(1) + b.get_lit()/4));
+          b.set_res((((b.get_srcs(1) - 4000) + b.get_lit())/4));
           
           branch = true;
           break;
@@ -777,7 +810,7 @@ int beu(int i){
       }// end if branch 
       
       if (b.get_int() == BAL){
-        b.set_res(i + 1);
+        b.set_res(4000 + (i * 4) + 4); //the next line in the program in the weird format ...
         fwd_val[BEU][0] = REG_X;
         fwd_val[BEU][1] = b.get_res();
         fwd_val[BEU][2] = i;
@@ -839,6 +872,16 @@ int alu1 (int i){
           case STORE :
             a.set_res(a.get_srcs(2) + a.get_lit());
             if (debug) cout << i << ": ALU1 is calculating an address offset!" << endl;
+            if (fwd_val[ALU2][2] == a.depends(1)){
+              a.set_src(1, fwd_val[ALU2][1]);
+              a.mark_as_valid(1);
+            } else if (fwd_val[MEM][2] == a.depends(1)){
+              a.set_src(1, fwd_val[MEM][1]);
+              a.mark_as_valid(1);
+            } else if(fwd_val[WB][2] == a.depends(2)) {
+              a.set_src(1, fwd_val[WB][1]);
+              a.mark_as_valid(1);
+            }//end if
             break;
           case LOAD : 
             a.set_res(a.get_srcs(1) + a.get_lit());
@@ -968,7 +1011,7 @@ int alu2(int i){
         if (debug) if (debug) cout << i << ": Store is ready to move into Memory!" << endl;
       }else {
 
-        if (fwd_val[MEM][0] == pc_int[i].get_dest() && fwd_val[MEM][2] == pc_int[i].depends(1)){
+        if (fwd_val[MEM][2] == pc_int[i].depends(1)){
           //search from most recent to furthest
           pc_int[i].set_src(1, fwd_val[MEM][1]);
           pc_int[i].mark_as_valid(1);
@@ -976,7 +1019,7 @@ int alu2(int i){
           dirty_latch[MEM] = true;
           if (debug) if (debug) cout << i << ": ALU 2 recieved value forwarded from Memory! " << endl;
         }
-        else if (fwd_val[WB][0] == pc_int[i].get_dest() && fwd_val[WB][2] == pc_int[i].depends(1)){
+        else if (fwd_val[WB][2] == pc_int[i].depends(1)){
           //search from most recent to furthest
           pc_int[i].set_src(1, fwd_val[WB][1]);
           pc_int[i].mark_as_valid(1);
@@ -1022,11 +1065,11 @@ int mem(int i){
     if(i != ND){
       switch(pc_int[i].get_int()){
         case STORE: 
-          write_to_mem(pc_int[i].get_res(), pc_int[i].get_srcs(1)); 
+          memory[pc_int[i].get_res() / 4] = pc_int[i].get_srcs(1); 
           if (debug) cout << i << ": Stored " << pc_int[i].get_srcs(1) << " at location: " << pc_int[i].get_res() << endl;
           break;
         case LOAD:
-          pc_int[i].set_res(access_memory_at(pc_int[i].get_res()));
+          pc_int[i].set_res(memory[pc_int[i].get_res()/4]);
           if (debug) cout << i << ": Loaded value " << pc_int[i].get_res() << " from memory" << endl;
           break;
         default: 
