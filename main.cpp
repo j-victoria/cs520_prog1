@@ -246,7 +246,11 @@ int get_inst_from_file (const char * file_name){
     return -1;
   }
   while(getline(inst_file, inst)){
-    pc_int.push_back(Instruction(inst));
+    if(inst.find_first_of("ABCDEFGHIJKLOMOPQRSTUVWXYZ") != string::npos)
+    {
+        // There's a non-space.
+        pc_int.push_back(Instruction(inst));
+    }
   }  
   
   inst_file.close();
@@ -272,8 +276,9 @@ int fetch (int inst_index) {
         inst_index = ND;
       } else {
         string rest;
-        if (s.compare(0, 4, "HALT") == 0){
+        if (s[0] == 'H'){
           i.set_inst("HALT");
+          if (debug) cout << ": HALT detected" << endl;
         } else {
           i.set_inst(s.substr(0, s.find(" ")));
           if (debug) cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
@@ -417,6 +422,12 @@ int fetch (int inst_index) {
     //no stall, not squashed, i = ND
     next_pc[FETCH] = ND;
     dirty_latch[FETCH] = true;
+  } else if (pc_int[inst_index].get_int() == HALT){
+    next_pc[FETCH] = ND;
+    dirty_latch[FETCH] = true;
+    next_pc[DRF] = inst_index;
+    dirty_latch[DRF] = true;
+  
   } else  {
     //No stall, not squashed, the next sequential instruction exists, and i != ND
     next_pc[FETCH] = inst_index + 1;
@@ -448,7 +459,8 @@ int decode (int i){
     }  else {
       if (debug) cout << i << ": Decode ready to decode!" << endl;
       d.create_dependency(1, ND); d.create_dependency(2, ND);//assume no dependencies   
-      d.mark_as_valid(1); d.mark_as_valid(2);
+      d.mark_as_invalid(1); d.mark_as_invalid(2);
+      if (d.get_int() == HALT){d.mark_as_valid(1); d.mark_as_valid(2);}
       int dep;
       for (int j = 1; j < 3; j++){
         if (d.get_src_ar(j) != ND){
@@ -674,7 +686,7 @@ int decode (int i){
       } else if (fwd_val[MEM][2] == d.depends(1)){
         d.set_src(1, fwd_val[MEM][1]);
         d.mark_as_valid(1);
-      } else if(fwd_val[WB][2] == d.depends(2)) {
+      } else if(fwd_val[WB][2] == d.depends(1)) {
         d.set_src(1, fwd_val[WB][1]);
         d.mark_as_valid(1);
       }//end if
@@ -883,12 +895,15 @@ int alu1 (int i){
             if (fwd_val[ALU2][2] == a.depends(1)){
               a.set_src(1, fwd_val[ALU2][1]);
               a.mark_as_valid(1);
+              if (debug) cout << i << ": got forwarded value from alu2" << endl;
             } else if (fwd_val[MEM][2] == a.depends(1)){
               a.set_src(1, fwd_val[MEM][1]);
               a.mark_as_valid(1);
-            } else if(fwd_val[WB][2] == a.depends(2)) {
+              if (debug) cout << i << ": got forwarded value from mem" << endl;
+            } else if(fwd_val[WB][2] == a.depends(1)) {
               a.set_src(1, fwd_val[WB][1]);
               a.mark_as_valid(1);
+              if (debug) cout << i << ": got forwarded value from wb" << endl;
             }//end if
             break;
           case LOAD : 
@@ -907,6 +922,7 @@ int alu1 (int i){
     stall[ALU1] = true;
     next_pc[ALU1] = i;
     dirty_latch[ALU1] = true;
+    
   } else {
     next_pc[ALU2] = i;
     dirty_latch[ALU2] = true;
@@ -994,19 +1010,15 @@ int alu2(int i){
   }else{
     if (i != ND){
       //first we forward the caluculated data
-      switch (pc_int[i].get_int()){
-        case ADD : case SUB : case MUL : case AND : case OR : case EX_OR : case MOVC :
-          if (debug) cout << i << ": ALU2 finished calculating the result: " << pc_int[i].get_res() << endl;
-          fwd_val[ALU2][0] = pc_int[i].get_dest();
-          fwd_val[ALU2][1] = pc_int[i].get_res();
-          fwd_val[ALU2][2] = i;
-          if (debug) cout << i << ": Forwarded value from ALU 2!" << endl;;
-          break;
-        default :
-          fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;
-          break;
-      }
-    } else {if (debug) cout << "ALU 2 did nothing..." << endl; fwd_val[DELAY][0] = fwd_val[DELAY][1] = fwd_val[DELAY][2] = ND;}
+      if (pc_int[i].get_int() != LOAD && pc_int[i].get_int() == STORE){
+       
+        if (debug) cout << i << ": ALU2 finished calculating the result: " << pc_int[i].get_res() << endl;
+        fwd_val[ALU2][0] = pc_int[i].get_dest();
+        fwd_val[ALU2][1] = pc_int[i].get_res();
+        fwd_val[ALU2][2] = i;
+        if (debug) cout << i << ": Forwarded value from ALU 2!" << endl;
+      } else {fwd_val[ALU2][0] = fwd_val[ALU2][1] = fwd_val[ALU2][2] = ND;}
+    } else {if (debug) cout << "ALU 2 did nothing..." << endl; fwd_val[ALU2][0] = fwd_val[ALU2][1] = fwd_val[ALU2][2] = ND;}
   }
   //then we deal with STORE
   //STORE is the only instruction that can stall here (out side of you know, there just being a stall somehow)
