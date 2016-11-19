@@ -3,6 +3,10 @@ Simulator for the simple APEX pipeline with forwarding! discussed in class
 
 By Marvin Vinluan and Jay Victoria
 
+This project is found at github at: https://github.com/j-victoria/cs520_prog1
+
+Test input files all start with 'test'
+
 Test runs are in output.txt
 
 fib calulate the first 30 Fibonacci numbers and puts them the the first 31 spaces in memory (memory[0] = 0)
