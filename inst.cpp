@@ -117,9 +117,10 @@ void Instruction::set_dest(int s) {
 }
 
 void Instruction::clear () {
-  src1 = src2 = src3 = -1;
-  src1_valid = src2_valid = src3_valid = false;
-  depends_on3 = depends_on2 = depends_on1 = -1; 
+  dest = src1 = src2 = src3 = lit = res = -1;
+  src1_valid = src2_valid = src3_valid = false ;
+  depends_on1 = depends_on2 = depends_on3 = -1;
+  src1_ar = src2_ar = src3_ar = -1;
 }
 
 void Instruction::set_src(int i, int v){

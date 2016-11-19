@@ -151,12 +151,12 @@ int main (int argc, char *argv[]) {
   do{
     cout << "Pick a mode - (I)nitialize, (S)imulate, or (D)isplay: ";
     getline(cin, in);
-    if (in.compare("Display") <= 0 || in.compare("display") <= 0) {
+    if (in[0] == 'd' || in[0] == 'D') {
       display_latch(curr_pc);
       display_rf();
       print_mem(0, 400);
       
-    } else if (in.compare("Initialize") <= 0 || in.compare("initialize") <= 0) {
+    } else if (in[0] == 'i' || in[0] == 'I') {
       cout << "Initializing..." << endl;
       memset(stall, false, sizeof(stall));
   
@@ -171,15 +171,23 @@ int main (int argc, char *argv[]) {
       squash = false;
       z_ptr = ND;
 
-      for(int i = 0; i < WB + 1; i++){
+      for(int i = FETCH; i <= WB; i++){
         fwd_val[i][0] = fwd_val[i][1] = fwd_val[i][2] = ND;
       }
       memset(next_pc, -1, sizeof(next_pc));
+      
+      memset(memory, 0, sizeof(memory));
+      for (int i = FETCH; i <= WB; i++){
+        next_pc[i] = ND;
+      }
       next_pc[FETCH] = 0;
       pc_int.erase(pc_int.begin(), pc_int.end());
       get_inst_from_file(argv[1]);
       if (debug) cout << pc_int.size();
-    } else if (in.compare("Simulate") <= 0 || in.compare("simulate") <= 0){
+      for (int i = 0; i < pc_int.size(); i++){
+        pc_int[i].clear();
+      }
+    } else if (in[0] =='s' || in[0] == 'S'){
       n = 1;
       cout << "Starting execution..." << endl;
       int j = in.find_first_of("0123456789", 0);
@@ -422,6 +430,8 @@ int fetch (int inst_index) {
     //drf is not stalled, but instruction is the last line in the file
     next_pc[FETCH] = ND;
     dirty_latch[FETCH] = true;
+    next_pc[DRF] = inst_index;
+    dirty_latch[DRF] = true;
   } else if (inst_index == ND){
     //no stall, not squashed, i = ND
     next_pc[FETCH] = ND;
@@ -479,17 +489,22 @@ int decode (int i){
             //we have to walk forward through the stages to find the instruction we are  dependant on
             if (pc_int[curr_pc[ALU1]].get_dest() == d.get_src_ar(j)){
               dep = curr_pc[ALU1];
-              
-            }else if (pc_int[curr_pc[BEU]].get_dest() == d.get_src_ar(j)) {
+              if (debug) cout << i <<": found depent instructio in alu 1" << endl;
+            }else if (pc_int[curr_pc[BEU]].get_dest() == d.get_src_ar(j) && d.get_int() == JUMP) {
               dep = curr_pc[BEU];
+              if (debug) cout << i <<": found depent instruction in BEU" << endl;
             } else if (pc_int[curr_pc[ALU2]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[ALU2];
-            } else if (pc_int[curr_pc[DELAY]].get_dest() == d.get_src_ar(j)) {
+              if (debug) cout << i <<": found depent instructio in alu 2" << endl;
+            } else if (pc_int[curr_pc[DELAY]].get_dest() == d.get_src_ar(j) && d.get_int() == JUMP) {
               dep = curr_pc[DELAY];
+              if (debug) cout << i <<": found depent instructio in delay" << endl;
             } else if (pc_int[curr_pc[MEM]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[MEM];
+              if (debug) cout << i <<": found depent instructio in memory" << endl;
             } else if (pc_int[curr_pc[WB]].get_dest() == d.get_src_ar(j)) {
               dep = curr_pc[WB];
+              if (debug) cout << i <<": found depent instructio in writeback" << endl;
             } else {
               //error case
             }
@@ -684,16 +699,18 @@ int decode (int i){
           if (debug) cout << i << ": Decode could not resolve all sources in time. Cannot move forward" << endl;
         }
       }
-      if (fwd_val[ALU2][2] == d.depends(1)){
-        d.set_src(1, fwd_val[ALU2][1]);
-        d.mark_as_valid(1);
-      } else if (fwd_val[MEM][2] == d.depends(1)){
-        d.set_src(1, fwd_val[MEM][1]);
-        d.mark_as_valid(1);
-      } else if(fwd_val[WB][2] == d.depends(1)) {
-        d.set_src(1, fwd_val[WB][1]);
-        d.mark_as_valid(1);
-      }//end if
+      if (!(d.is_valid(1))){
+        if (fwd_val[ALU2][2] == d.depends(1)){
+          d.set_src(1, fwd_val[ALU2][1]);
+          d.mark_as_valid(1);
+        } else if (fwd_val[MEM][2] == d.depends(1)){
+          d.set_src(1, fwd_val[MEM][1]);
+          d.mark_as_valid(1);
+        } else if(fwd_val[WB][2] == d.depends(1)) {
+          d.set_src(1, fwd_val[WB][1]);
+          d.mark_as_valid(1);
+        }//end if
+      }
       if(!(stall[BEU])){
         next_pc[BEU] = ND;
         dirty_latch[BEU] = true;
@@ -896,19 +913,21 @@ int alu1 (int i){
           case STORE :
             a.set_res(a.get_srcs(2) + a.get_lit());
             if (debug) cout << i << ": ALU1 is calculating an address offset!" << endl;
-            if (fwd_val[ALU2][2] == a.depends(1)){
-              a.set_src(1, fwd_val[ALU2][1]);
-              a.mark_as_valid(1);
-              if (debug) cout << i << ": got forwarded value from alu2" << endl;
-            } else if (fwd_val[MEM][2] == a.depends(1)){
-              a.set_src(1, fwd_val[MEM][1]);
-              a.mark_as_valid(1);
-              if (debug) cout << i << ": got forwarded value from mem" << endl;
-            } else if(fwd_val[WB][2] == a.depends(1)) {
-              a.set_src(1, fwd_val[WB][1]);
-              a.mark_as_valid(1);
-              if (debug) cout << i << ": got forwarded value from wb" << endl;
-            }//end if
+            if (!(a.ready())){
+              if (fwd_val[ALU2][2] == a.depends(1)){
+                a.set_src(1, fwd_val[ALU2][1]);
+                a.mark_as_valid(1);
+                if (debug) cout << i << ": got forwarded value from alu2" << endl;
+              } else if (fwd_val[MEM][2] == a.depends(1)){
+                a.set_src(1, fwd_val[MEM][1]);
+                a.mark_as_valid(1);
+                if (debug) cout << i << ": got forwarded value from mem" << endl;
+              } else if(fwd_val[WB][2] == a.depends(1)) {
+                a.set_src(1, fwd_val[WB][1]);
+                a.mark_as_valid(1);
+                if (debug) cout << i << ": got forwarded value from wb" << endl;
+              }//end if
+            }
             break;
           case LOAD : 
             a.set_res(a.get_srcs(1) + a.get_lit());
@@ -1014,7 +1033,7 @@ int alu2(int i){
   }else{
     if (i != ND){
       //first we forward the caluculated data
-      if (pc_int[i].get_int() != LOAD && pc_int[i].get_int() == STORE){
+      if (pc_int[i].get_int() != LOAD && pc_int[i].get_int() != STORE){
        
         if (debug) cout << i << ": ALU2 finished calculating the result: " << pc_int[i].get_res() << endl;
         fwd_val[ALU2][0] = pc_int[i].get_dest();
