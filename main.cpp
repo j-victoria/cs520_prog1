@@ -60,8 +60,8 @@ int is_zero (int v){
 }
 
 void display_latch(int * latch){
-  cout << "Fetch:" << latch[FETCH] << " Decode:" << latch[DRF] << " ALU 1:" << latch[ALU1] << " ALU2 :" << latch[ALU2] << endl;
-  cout << "Brach FU:" << latch[BEU] << " Delay:" << latch[DELAY] << " Memory:" << latch[MEM] << " Write Back:" << latch[WB] << endl;
+  cout << "Fetch:" << latch[FETCH] << " Decode:" << latch[DRF] << " ALU1:" << latch[ALU1] << " ALU2:" << latch[ALU2] << endl;
+  cout << "Branch FU:" << latch[BEU] << " Delay:" << latch[DELAY] << " Memory:" << latch[MEM] << " WriteBack:" << latch[WB] << endl;
   return;
 }
 
@@ -149,14 +149,14 @@ int main (int argc, char *argv[]) {
   next_pc[FETCH] = 0;
   int wbrv;
   do{
-    cout << "Pick a mode Initilize, Simulate, or Display: ";
+    cout << "Pick a mode - (I)nitialize, (S)imulate, or (D)isplay: ";
     getline(cin, in);
-    if (in.compare("Display") <= 0) {
+    if (in.compare("Display") <= 0 || in.compare("display") <= 0) {
       display_latch(curr_pc);
       display_rf();
       print_mem(0, 400);
       
-    } else if (in.compare("Initilize") <= 0) {
+    } else if (in.compare("Initialize") <= 0 || in.compare("initialize") <= 0) {
       cout << "Initilizing..." << endl;
       memset(stall, false, sizeof(stall));
   
@@ -179,9 +179,9 @@ int main (int argc, char *argv[]) {
       pc_int.erase(pc_int.begin(), pc_int.end());
       get_inst_from_file(argv[1]);
       if (debug) cout << pc_int.size();
-    } else if (in.compare(0, 7, "Simulate") <= 0){
+    } else if (in.compare("Simulate") <= 0 in.compare("simulate") <= 0){
       n = 1;
-      cout << "Starting exectution..." << endl;
+      cout << "Starting execution..." << endl;
       int j = in.find_first_of("0123456789", 0);
       int cycles = 0;
       do{
@@ -193,7 +193,11 @@ int main (int argc, char *argv[]) {
         j++;
         if (debug) cout << j << in.length() << endl;
       }while(j < (in.length()));
-      cout << "Simulating " << cycles << " cycles" << endl;
+      if (cycles < 2) {
+        cout << "Simulating 1 cycle" << endl;
+      } else {
+        cout << "Simulating " << cycles << " cycles" << endl;
+      }
       if (debug) cout << pc_int.size() <<endl;
       do{
         //copy the new pc addresses into the current pc addr buffer
@@ -534,7 +538,7 @@ int decode (int i){
       if(stall[BEU]){
         stall[DRF] = true;
         next_pc[DRF] = i;
-        if (debug) cout << i << ": Stall in Brach FU! Cannot move forward!" << endl;
+        if (debug) cout << i << ": Stall in Branch FU! Cannot move forward!" << endl;
         dirty_latch[DRF] = true;
       }else if (d.ready()){
         next_pc[BEU] = i;
