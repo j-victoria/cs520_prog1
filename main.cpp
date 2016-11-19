@@ -157,7 +157,7 @@ int main (int argc, char *argv[]) {
       print_mem(0, 400);
       
     } else if (in.compare("Initialize") <= 0 || in.compare("initialize") <= 0) {
-      cout << "Initilizing..." << endl;
+      cout << "Initializing..." << endl;
       memset(stall, false, sizeof(stall));
   
       for(int i = 0; i < 9; i++){
