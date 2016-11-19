@@ -7,7 +7,9 @@ Test runs are in output.txt
 
 fib calulate the first 30 fibbonocci numbers and puts them the the first 31 spaces in memory (memory[0] = 0)
 
-Work Tracker on Google sheets: https://docs.google.com/spreadsheets/d/1pbJeZIAFalD5Gfd6pw4D8lTtYZpmo7YcgfdLAASyOfQ/edit?usp=sharing 
+The commit history of this git repository represents the work log
+
+There were 3 group meetings, one on Oct 30th, one on Nov 13th and one on Nov 19th
 
 make 
 to compile 
