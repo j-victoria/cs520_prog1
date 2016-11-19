@@ -5,7 +5,7 @@ By Marvin Vinluan and Jay Victoria
 
 Test runs are in output.txt
 
-fib calulate the first 30 fibbonocci numbers and puts them the the first 31 spaces in memory (memory[0] = 0)
+fib calulate the first 30 Fibonacci numbers and puts them the the first 31 spaces in memory (memory[0] = 0)
 
 The commit history of this git repository represents the work log
 
