@@ -179,7 +179,7 @@ int main (int argc, char *argv[]) {
       pc_int.erase(pc_int.begin(), pc_int.end());
       get_inst_from_file(argv[1]);
       if (debug) cout << pc_int.size();
-    } else if (in.compare("Simulate") <= 0 in.compare("simulate") <= 0){
+    } else if (in.compare("Simulate") <= 0 || in.compare("simulate") <= 0){
       n = 1;
       cout << "Starting execution..." << endl;
       int j = in.find_first_of("0123456789", 0);
