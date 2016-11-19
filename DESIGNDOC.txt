@@ -1,1 +1,25 @@
+CS520 Project 1
+19 November 2016
+Jay Victoria (jvictor5)
+Marvin Vinluan (mvinlua1)
 
+Design Document
+
+> main.cpp
+Responsible for user interface, reading input file, and simulating pipeline stages.
+
+-- int main(int argc, char *argv[])
+Takes in input filename, runs APEX simulator based on that input.
+
+-- int get_inst_from_file (const char * file_name)
+Reads lines from input file and stores them in a Vector holding type Instruction.
+
+-- int fetch (int inst_index)
+-- int decode (int i)
+-- int beu(int i
+-- int alu1 (int i)
+-- int delay (int i)
+-- int alu2(int i)
+-- int mem(int i)
+-- int wb (int i)
+Functions that simulate the operation of their respective APEX pipeline stages.
