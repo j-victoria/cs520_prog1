@@ -268,51 +268,29 @@ int fetch (int inst_index) {
     if (!(inst_index == ND)){
       Instruction i = pc_int[inst_index];
       string s = i.get_name();
-
-      i.set_inst(s.substr(0, s.find(" ")));
-      if (debug) cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
-      string rest;
-      if (i.get_int() != HALT){
-        rest = s.substr(s.find(" "), s.length() - 1);
-      }
-      //if (debug) cout << rest << endl;
-
-      if (i.get_int() == JUMP && rest.find("X", 0) != string::npos){
-        // handle special case here
-        if(debug) cout << inst_index << "JUMP special case" << endl;
-        i.set_dest(ND); 
-        i.set_src_ar(1, REG_X);
-        i.set_src_ar(2, ND);
-        int j = rest.find_first_of("0123456789", 0);
-        int reg = 0;
-        int sign = 1;
-        if (rest[j - 1] == '-') sign = -1;
-
-        while ( isdigit( rest[j] ) ) {
-          reg = reg * 10 + ((int) rest[j] - 48);
-          j++;
-        }
-        //if (debug) cout << "val :" << reg << endl;
-        reg = reg * sign;
-        i.set_lit(reg);
-        
-      } else if (i.get_int() == HALT){
-        i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
-        
+      if (s.empty()) {
+        inst_index = ND;
       } else {
+        string rest;
+        if (s.compare(0, 4, "HALT") == 0){
+          i.set_inst("HALT");
+        } else {
+          i.set_inst(s.substr(0, s.find(" ")));
+          if (debug) cout << inst_index << ": Fetch determined instruction to be a "<< i.printable_inst() << endl;
+          
+        }
+        if (i.get_int() != HALT){
+          rest = s.substr(s.find(" "), s.length() - 1);
+        }
+        //if (debug) cout << rest << endl;
 
-        if (debug) cout << inst_index << ": No special case "<< endl;
-
-        int j = 0, r = 1;
-        instructions_t inst = i.get_int();
-
-        //set up default case 
-        i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
-        //this should make decode slightly easier
-
-
-        j = rest.find_first_of("0123456789", j + 1);
-        while (j < rest.length()){
+        if (i.get_int() == JUMP && rest.find("X", 0) != string::npos){
+          // handle special case here
+          if(debug) cout << inst_index << "JUMP special case" << endl;
+          i.set_dest(ND); 
+          i.set_src_ar(1, REG_X);
+          i.set_src_ar(2, ND);
+          int j = rest.find_first_of("0123456789", 0);
           int reg = 0;
           int sign = 1;
           if (rest[j - 1] == '-') sign = -1;
@@ -323,72 +301,102 @@ int fetch (int inst_index) {
           }
           //if (debug) cout << "val :" << reg << endl;
           reg = reg * sign;
-          if(r == 1){
-            if(inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD || inst == MOVC){
-              //write to register inst.
-              i.set_dest(reg);
-              //will mark as invalid in decode
-            } else if (inst == STORE || inst == BAL || inst == JUMP){
-              i.set_src_ar(1, reg); i.set_dest(ND);
-            } else if (inst == BZ || inst == BNZ){
-              i.set_lit(reg); i.set_src(1, REG_X);  
+          i.set_lit(reg);
 
-            }else {
-              //error case
-            }
+        } else if (i.get_int() == HALT){
+          i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
 
+        } else {
 
-          } else if (r == 2) {
-            if (inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD){
-              //1st reg src
-              i.set_src_ar(1, reg);
-            } else if (inst == STORE) {
-              i.set_src_ar(2, reg);
-            }else if (inst == MOVC || inst == JUMP || inst == BAL){
-              //
+          if (debug) cout << inst_index << ": No special case "<< endl;
 
-              i.set_lit(reg);
-            }else {
-              // error case
-            }
+          int j = 0, r = 1;
+          instructions_t inst = i.get_int();
 
-          } else {
-            //r == 3
-            if (inst == LOAD || inst == STORE){
-              i.set_lit(reg);
-            } else if (inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR){
-              i.set_src_ar(2, reg);
-            } else {
-              //error case
-            }
+          //set up default case 
+          i.set_dest(ND); i.set_src_ar(1, ND); i.set_src_ar(2, ND); i.set_lit(ND); i.set_res(ND);
+          //this should make decode slightly easier
 
-          }
-          r++;
 
           j = rest.find_first_of("0123456789", j + 1);
+          while (j < rest.length()){
+            int reg = 0;
+            int sign = 1;
+            if (rest[j - 1] == '-') sign = -1;
+
+            while ( isdigit( rest[j] ) ) {
+              reg = reg * 10 + ((int) rest[j] - 48);
+              j++;
+            }
+            //if (debug) cout << "val :" << reg << endl;
+            reg = reg * sign;
+            if(r == 1){
+              if(inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD || inst == MOVC){
+                //write to register inst.
+                i.set_dest(reg);
+                //will mark as invalid in decode
+              } else if (inst == STORE || inst == BAL || inst == JUMP){
+                i.set_src_ar(1, reg); i.set_dest(ND);
+              } else if (inst == BZ || inst == BNZ){
+                i.set_lit(reg); i.set_src(1, REG_X);  
+
+              }else {
+                //error case
+              }
+
+
+            } else if (r == 2) {
+              if (inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR || inst == LOAD){
+                //1st reg src
+                i.set_src_ar(1, reg);
+              } else if (inst == STORE) {
+                i.set_src_ar(2, reg);
+              }else if (inst == MOVC || inst == JUMP || inst == BAL){
+                //
+
+                i.set_lit(reg);
+              }else {
+                // error case
+              }
+
+            } else {
+              //r == 3
+              if (inst == LOAD || inst == STORE){
+                i.set_lit(reg);
+              } else if (inst == ADD || inst == SUB || inst == MUL || inst == AND || inst == OR || inst == EX_OR){
+                i.set_src_ar(2, reg);
+              } else {
+                //error case
+              }
+
+            }
+            r++;
+
+            j = rest.find_first_of("0123456789", j + 1);
+          }
         }
+        if (i.get_dest() != ND){
+          if (debug) cout << inst_index <<": Fetch determined destination to be AR "<< i.get_dest() << endl;
+        } else {
+          if (debug) cout << inst_index << ": Fetch did not discover a destination" << endl;
+        }
+       if (i.get_src_ar(1) != ND){
+          if (debug) cout << inst_index <<": Fetch determined source 1 to be AR "<< i.get_src_ar(1) << endl;
+        } else {
+          if (debug) cout << inst_index << ": Fetch did not discover a source 1" << endl;
+        }
+        if (i.get_src_ar(2) != ND){
+          if (debug) cout << inst_index <<": Fetch determined source 2 to be AR "<< i.get_src_ar(2) << endl;
+        } else {
+          if (debug) cout << inst_index << ": Fetch did not discover a source 2" << endl;
+        }
+        if (i.get_lit() != ND){
+          if (debug) cout << inst_index <<": Fetch determined literal to be "<< i.get_lit() << endl;
+        } else {
+          if (debug) cout << inst_index << ": Fetch did not discover a literal" << endl;
+        }
+        pc_int[inst_index] = i;
       }
-      if (i.get_dest() != ND){
-        if (debug) cout << inst_index <<": Fetch determined destination to be AR "<< i.get_dest() << endl;
-      } else {
-        if (debug) cout << inst_index << ": Fetch did not discover a destination" << endl;
-      }
-     if (i.get_src_ar(1) != ND){
-        if (debug) cout << inst_index <<": Fetch determined source 1 to be AR "<< i.get_src_ar(1) << endl;
-      } else {
-        if (debug) cout << inst_index << ": Fetch did not discover a source 1" << endl;
-      }
-      if (i.get_src_ar(2) != ND){
-        if (debug) cout << inst_index <<": Fetch determined source 2 to be AR "<< i.get_src_ar(2) << endl;
-      } else {
-        if (debug) cout << inst_index << ": Fetch did not discover a source 2" << endl;
-      }
-      if (i.get_lit() != ND){
-        if (debug) cout << inst_index <<": Fetch determined literal to be "<< i.get_lit() << endl;
-      } else {
-        if (debug) cout << inst_index << ": Fetch did not discover a literal" << endl;
-      }
-    pc_int[inst_index] = i;
     } else {if (debug) cout << "Fetch did nothing..." << endl;} // end if nd
   }// end if stall
   
