@@ -75,7 +75,7 @@ int fetch (Instruction * inst){
     }
     string s;
     while(getline(inst_file, s) ){
-      if(s.find_first_of("ABCDEFGHIJKLOMOPQRSTUVWXYZ") != string::npos)
+      if(s.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") != string::npos)
       {
         imem.push_back(s);
       }
@@ -149,7 +149,6 @@ int decode (Instruction * inst){
         }
         ar = ar * sign;
         if (r == 1){  //this is the first number we came across
-          //let's just deal in ar's for now...
           switch(inst->type){
             case ADD : case SUB : case MUL : case AND : case OR : case EX_OR : case MOVC : case LOAD :
               inst->dest_ar = ar;
