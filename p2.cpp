@@ -794,6 +794,10 @@ void print_iq (){
   }
 }
 
+void print_memory(int a1, int a2) {
+  //
+}
+
 int main (int argc, char *argv[]) {
   string input;
   file_name = argv[1];
