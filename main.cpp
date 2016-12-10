@@ -26,16 +26,34 @@ using namespace std;
 #define DELAY 6
 #define MEM 7
 #define WB 8
+//extra stages!
+#define DISPATCH 9
+#define MFU 10 //multiplication function unit
+#define LSU1 11
+#define LSU2 12
 
 #define ZERO_FLAG 17
-#define REG_X 18
+#define REG_X 16 //register x is AR16 which doesn't exist 
 
 #define EOP -2 // used to signal end of processing
 
 #define ND -1 //used when a field is not in use 
 
+#define ROB_SIZE 40
+#define IQ_SIZE 12
+
+//structs
+struct iq_entry {
+  Instruction * this_i;
+  int dispatch_cycle;
+  bool valid;
+}iqe;
+
 //globals
-Register rf[20];
+Register urf[33]; //physical registers
+Register * rat[16];
+Register * rrat[16];
+Register * fl[33]; //free list 
 vector<Instruction> pc_int;
 int memory[1000];
 int fwd_val [9][3]; //where [MEM][0] is the dest. of a fwd'd value resulting from the mem stage
@@ -52,6 +70,10 @@ bool dirty_latch[9]; // records whether the latch has been written to this cycle
 
 bool debug;
 
+iqe iq[IQ_SIZE];
+Instruction * rob[ROB_SIZE];
+int rob_head, rob_tail;
+
 //functions
 
 
@@ -60,8 +82,14 @@ int is_zero (int v){
 }
 
 void display_latch(int * latch){
-  cout << "Fetch:" << latch[FETCH] << " Decode:" << latch[DRF] << " ALU1:" << latch[ALU1] << " ALU2:" << latch[ALU2] << endl;
-  cout << "Branch FU:" << latch[BEU] << " Delay:" << latch[DELAY] << " Memory:" << latch[MEM] << " WriteBack:" << latch[WB] << endl;
+  cout << "Fetch: " << (latch[FETCH]== ND ? "nothing":pc_int[latch[FETCH]].get_name()) <<
+    endl << "Decode: " << (latch[DRF]== ND ? "nothing":pc_int[latch[DRF]].get_name()) << 
+    endl << "ALU1: " << (latch[ALU1]== ND ? "nothing":pc_int[latch[ALU1]].get_name()) << 
+    endl << "ALU2: " << (latch[ALU2]== ND ? "nothing":pc_int[latch[ALU2]].get_name()) <<
+    endl << "Branch FU: " << (latch[BEU]== ND ? "nothing":pc_int[latch[BEU]].get_name()) << 
+    endl << "Delay: " << (latch[DELAY]== ND ? "nothing":pc_int[latch[DELAY]].get_name()) << 
+    endl << "Memory: " << (latch[MEM]== ND ? "nothing":pc_int[latch[MEM]].get_name()) << 
+    endl << "WriteBack: " << (latch[WB]== ND ? "nothing":pc_int[latch[WB]].get_name()) << endl;
   return;
 }
 
@@ -109,6 +137,11 @@ int beu (int);
 int delay (int);
 int mem (int);
 int wb (int);
+
+int lsu1(int);
+int lsu2(int);
+int mfu(int);
+int isssue_logic();
 
 //main
 int main (int argc, char *argv[]) {
@@ -356,7 +389,7 @@ int fetch (int inst_index) {
                 i.set_src_ar(1, reg); i.set_dest(ND);
               } else if (inst == BZ || inst == BNZ){
                 i.set_lit(reg); i.set_src(1, REG_X);  
-
+                
               }else {
                 //error case
               }
@@ -1171,5 +1204,17 @@ int wb (int i) {
     
     
   
+  return 0;
+}
+
+int issue_logic(int v){
+  for (int i = 0; i < IQ_SIZE; i++){
+    if (iq[i].valid){
+      if(iq[i].this_i->ready()){
+        
+        
+      }
+    }
+  }
   return 0;
 }

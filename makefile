@@ -1,3 +1,2 @@
-all:
-	g++ main.cpp inst.cpp registers.cpp -o main
-
+make:
+	g++ -o p2 p2.cpp > error.txt
