@@ -829,7 +829,7 @@ int main (int argc, char *argv[]) {
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
-    } else if (input == "PRINT_MEMORY") {
+    //} else if (input == "PRINT_MEMORY") {
       // make print_memory work with 2 integer arguments
     } else {
       // nothing here yet
