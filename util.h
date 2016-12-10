@@ -12,11 +12,12 @@ typedef struct instruction_t {
 }Instruction;
 
 typedef struct reg {
+  vector<Instruction *> consumer1;
+  vector<Instruction *> consumer2;
   int value;
   bool valid;
   Instruction * producer;
-  vector<Instruction *> consumer1;
-  vector<Instruction *> consumer2;
+  
 }Register;
 
 typedef struct iq_entry {
