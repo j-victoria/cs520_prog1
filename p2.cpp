@@ -28,8 +28,12 @@ int RRAT[17];
 iqe IQ[IQ_SIZE];
 robe ROB[ROB_SIZE];
 int rob_head, rob_tail;
+<<<<<<< HEAD
 int memory[MEM_SIZE];
-priority_queue<int> FL;
+priority_queue<int, vector<int>, std::greater<int> > FL;
+=======
+int memory[MEM_SIZE];
+>>>>>>> 701689385d57de4d791dad0f50c324b4add7efbe
 
 #define DECODE 0
 #define DISPATCH 1
@@ -60,7 +64,7 @@ Instruction * last_branch;
 bool d;
 vector<string> imem;
 Instruction * z_ptr;
-
+bool eoe_flag;
 
 int fetch (Instruction * inst){
   //fills in an empty instruction with the instruction sting/name
@@ -94,7 +98,7 @@ int fetch (Instruction * inst){
   } else {inst->valid = false;}
   //populate the rest of the fields with ND's so there's no garbage
   if (inst->valid){
-    inst->dest= inst->src1_v= inst->src1_a= inst->src2_v= inst->src2_a= inst->lit= inst->res = ND;
+    inst->dest= inst->src1_v= inst->src1_a= inst->src2_v= inst->src2_a= inst->lit= inst->res = inst->dest_ar = ND;
     inst->src1 = inst->src2 = true;
     if (d) cout << "name as : " << inst->name << endl;
   } else {
@@ -218,6 +222,29 @@ int decode (Instruction * inst){
     if (d) cout << "src1_a: " << inst->src1_a << endl;
     if (d) cout << "src2_a: " << inst->src2_a << endl;
     if (d) cout << "lit: " << inst->lit << endl;
+    
+    if (inst->src1_a != ND){
+      if(urf[inst->src1_a].valid){
+        inst->src1_v = urf[inst->src1_a].value;
+        inst->src1 = true;
+        if (d) cout << "found source 1 value in register: " << inst->src1_v <<endl;
+      } else {
+        urf[inst->src1_a].consumer1.push_back(inst);
+        inst->src1 =false;
+        if (d) cout << "could not find value for source 1 in register file \n";
+      }
+    }
+    if (inst->src2_a != ND){
+      if(urf[inst->src2_a].valid){
+        inst->src2_v = urf[inst->src2_a].value;
+        inst->src2 = true;
+        if (d) cout << "found source 2 value in register: " << inst->src2_v <<endl;
+      } else {
+        urf[inst->src2_a].consumer2.push_back(inst);
+        inst->src2 = false;
+        if (d) cout << "could not find value for source 2 in register file \n";
+      }
+    }
   }
   return 0;
 }
@@ -229,45 +256,48 @@ int dispatch (Instruction * inst){
   s_d_flag = false;
   if (inst != NULL){
     inst->latch_loc = DISPATCH;
-    if (inst->src1_a != ND){
-      if(urf[inst->src1_a].valid){
+    
+    //check registers again (don't ask :/)
+    
+    if (!inst->src1){
+      if (urf[inst->src1_a].valid){
         inst->src1_v = urf[inst->src1_a].value;
         inst->src1 = true;
-        if (d) cout << "found source 1 value in register: " << inst->src1_v <<endl;
-      } else {
-        urf[inst->src1_a].consumer1.push_back(inst);
-        if (d) cout << "could not find value for source 1 in register file \n";
       }
     }
-    if (inst->src2_a != ND){
-      if(urf[inst->src2_a].valid){
+    if (!inst->src2){
+      if (urf[inst->src2_a].valid){
         inst->src2_v = urf[inst->src2_a].value;
         inst->src2 = true;
-        if (d) cout << "found source 2 value in register: " << inst->src2_v <<endl;
-      } else {
-        urf[inst->src2_a].consumer2.push_back(inst);
-        if (d) cout << "could not find value for source 1 in register file \n";
       }
     }
     int i = 0;
     while ((IQ[i].valid) && i < IQ_SIZE) i++;
+    
     if((inst->dest_ar == ND || !FL.empty()) && !IQ[i].valid && !ROB[rob_tail].valid && (last_branch == NULL || !(inst->type == BAL || inst->type == JUMP || inst->type == BZ || inst->type == BNZ))){
       //dispatch!
       if (d) cout << "dispatching...\n";
-      int rn = RAT[inst->dest_ar];
+      int rn;
       if (inst->dest_ar != ND){
+        if (d) cout << "setting up RAT \n";
+        rn = RAT[inst->dest_ar];
         inst->dest = RAT[inst->dest_ar] = FL.top();
         FL.pop();
       }
+      if (d) cout << "setting up IQ entry\n";
       IQ[i].inst = inst;
       IQ[i].valid = true;
       inst->iq_loc = i;
       inst->in_iq = true;
+      
+      if (d) cout << "setting up ROB entry\n";
       ROB[rob_tail].inst = inst;
       ROB[rob_tail].valid = true;
-      ROB[rob_tail].renaming = rn;
+      if (inst->dest_ar != ND) ROB[rob_tail].renaming = rn;
       inst->rob_loc = rob_tail;
       rob_tail = (rob_tail + 1) % ROB_SIZE;
+      
+      if (d) cout << "setting up other things\n";
       inst->dc = dispatch_cycle;
       if (inst->type == BAL || inst->type == JUMP || inst->type == BZ || inst->type == BNZ){
         last_branch = inst;
@@ -351,14 +381,18 @@ int alu2 (Instruction * inst){
       if (!(urf[inst->dest].consumer1[i]->src1)){
         urf[inst->dest].consumer1[i]->src1_v = inst->res;
         urf[inst->dest].consumer1[i]->src1 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;
         urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
+        
       }
     }
     for (int i = 0; i < urf[inst->dest].consumer2.size(); i++){
       if (!(urf[inst->dest].consumer2[i]->src2)){
         urf[inst->dest].consumer2[i]->src2_v = inst->res;
         urf[inst->dest].consumer2[i]->src2 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
         urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
+        
       }
     }
   if (d) cout << "alu2 calculated result for: " << inst->name << ": " << inst->res << endl;
@@ -391,37 +425,45 @@ int mfu (Instruction * inst){
           inst = IQ[i].inst;
           min = inst->dc;
           index = i;
+          if (d) cout << "found a candidate for mfu: " << inst->name << endl;
         }
       }
     }
     if (inst != NULL){
+      if (d) cout << "instruction found!(mfu): " << inst->name << endl; 
       inst->latch_loc = MFU;
       inst->in_iq = false;
       IQ[index].valid = false;
       counter++;
     }else {
-      
+      if (d) cout << "not instruction found (mfu) \n"; 
     }
     latch_c[MFU] = inst;
   } else if (counter == 3){
     inst->res = inst->src1_v * inst->src2_v;
+    if (d) cout << "mfu found a result for " << inst->name << ": " << inst->res << endl;
     for (int i = 0; i < urf[inst->dest].consumer1.size(); i++){
       if (!(urf[inst->dest].consumer1[i]->src1)){
         urf[inst->dest].consumer1[i]->src1_v = inst->res;
         urf[inst->dest].consumer1[i]->src1 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;
         urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
+       
       }
     }
     for (int i = 0; i < urf[inst->dest].consumer2.size(); i++){
       if (!(urf[inst->dest].consumer2[i]->src2)){
         urf[inst->dest].consumer2[i]->src2_v = inst->res;
         urf[inst->dest].consumer2[i]->src2 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
         urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
+
       }
     }
    counter = 0;
   } else {
     counter++;
+    if (d) cout << "mfu has not yet found a result for: " << inst->name << endl;
   }
   return 0;
 }
@@ -432,6 +474,7 @@ int mfuwb (Instruction * inst){
     urf[inst->dest].value = inst->res;
     urf[inst->dest].valid = true;
     ROB[inst->rob_loc].finished = true;
+    if (d) cout << "wrote "<< inst->res << " to " << inst->dest << ": "<< inst->name << endl;
   }
   return 0;
 }
@@ -446,6 +489,7 @@ int lsu1(){
         inst = IQ[i].inst;
         min = inst->dc;
         index = i;
+        if (d) cout << " candidate found for lsu1: " << inst->name << endl;
       }
     }
   }
@@ -454,7 +498,9 @@ int lsu1(){
     inst->latch_loc = LSU1;
     inst->in_iq = false;
     IQ[index].valid = false;
+    if (d) cout << "instruction found (lsu 1): " << inst->name << endl;
     inst->res = (inst->type == LOAD ? inst->src1_v+inst->lit : inst->src2_v+inst->lit);
+    if (d) cout << " address calculated for lsu1: " << inst->res << ": " << inst->name <<endl;
   }
   return 0;
 }
@@ -466,10 +512,12 @@ int lsu2(Instruction * inst){
     if (inst->rob_loc == rob_head){
       if (inst->type == LOAD){
         inst->res = memory[inst->res/4];
+        if (d) cout << "data retrived from memory: " << inst->res << ": " << inst->name << endl;
         for (int i = 0; i < urf[inst->dest].consumer1.size(); i++){
           if (!(urf[inst->dest].consumer1[i]->src1)){
             urf[inst->dest].consumer1[i]->src1_v = inst->res;
             urf[inst->dest].consumer1[i]->src1 = true;
+             if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;           
             urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
           }
         }
@@ -477,17 +525,22 @@ int lsu2(Instruction * inst){
           if (!(urf[inst->dest].consumer2[i]->src2)){
             urf[inst->dest].consumer2[i]->src2_v = inst->res;
             urf[inst->dest].consumer2[i]->src2 = true;
+            if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
             urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
+            
           }
         }
       }else if (inst->type == STORE){
         memory[inst->res/4] = inst->src1_v;
+        if (d) cout << "date stored "<< inst->src1_v << " at " << inst->res << ": "<< inst->name <<endl;
       }else {
         cout << "??? DANGER WILL ROBINSON!\n";
         exit(0);
       }
+    
     } else {
       s_ls_flag = true;
+      if (d) cout << "Instruction " << inst->name << "stalled, as it is not the head of the rob"  << inst->rob_loc << " | " << rob_head << endl;
     }
   }
   return 0;
@@ -499,8 +552,10 @@ int lswb(Instruction * inst){
     if (inst->type == LOAD){
       urf[inst->dest].value = inst->res;
       urf[inst->dest].valid = true;
-      ROB[inst->rob_loc].finished = true;
+      
+      if (d) cout << inst->name <<" wrote to memory\n";
     }
+    ROB[inst->rob_loc].finished = true;
   }
   return 0;
 }
@@ -562,150 +617,153 @@ int beu(){
 
 int simulate(){
     cout << "simulating...\n";
-  if (latch_c[BEU] != NULL)
-  {
-    int i = latch_c[BEU]->rob_loc - 1;
-    if (b_flag) {
-      if (d) cout << "squashing...\n";
-      while (rob_tail != i){
-        if (ROB[i].inst->in_iq){ 
-          IQ[ROB[i].inst->iq_loc].valid = false;
-        } else if (!ROB[i].finished) { 
-          latch_c[ROB[i].inst->latch_loc] = NULL;
-        }
+  if (!eoe_flag){
+    if (latch_c[BEU] != NULL)
+    {
+      int i = latch_c[BEU]->rob_loc - 1;
+      if (b_flag) {
+        if (d) cout << "squashing...\n";
+        while (rob_tail != i){
+          if (ROB[i].inst->in_iq){ 
+            IQ[ROB[i].inst->iq_loc].valid = false;
+          } else if (!ROB[i].finished) { 
+            latch_c[ROB[i].inst->latch_loc] = NULL;
+          }
 
 
-        if (!ROB[i].inst->src1) {
-          for (int j = 0; j < urf[ROB[i].inst->src1_a].consumer1.size(); j++ ) {
-            if (urf[ROB[i].inst->src1_a].consumer1[j] == ROB[i].inst){
-              urf[ROB[i].inst->src1_a].consumer1.erase(urf[ROB[i].inst->src1_a].consumer1.begin()+j);
+          if (!ROB[i].inst->src1) {
+            for (int j = 0; j < urf[ROB[i].inst->src1_a].consumer1.size(); j++ ) {
+              if (urf[ROB[i].inst->src1_a].consumer1[j] == ROB[i].inst){
+                urf[ROB[i].inst->src1_a].consumer1.erase(urf[ROB[i].inst->src1_a].consumer1.begin()+j);
+              }
             }
           }
-        }
-        if (!ROB[i].inst->src2){
-          for (int j = 0; j < urf[ROB[i].inst->src2_a].consumer2.size(); j++ ) {
-            if (urf[ROB[i].inst->src2_a].consumer2[j] == ROB[i].inst){
-              urf[ROB[i].inst->src2_a].consumer2.erase(urf[ROB[i].inst->src2_a].consumer2.begin()+j);
+          if (!ROB[i].inst->src2){
+            for (int j = 0; j < urf[ROB[i].inst->src2_a].consumer2.size(); j++ ) {
+              if (urf[ROB[i].inst->src2_a].consumer2[j] == ROB[i].inst){
+                urf[ROB[i].inst->src2_a].consumer2.erase(urf[ROB[i].inst->src2_a].consumer2.begin()+j);
+              }
             }
           }
-        }
 
-        for (int j = 0; j < icache.size(); j++){
-          if (ROB[i].inst->dc == icache[i].dc){
-            icache.erase(icache.begin() + j);
+          for (int j = 0; j < icache.size(); j++){
+            if (ROB[i].inst->dc == icache[i].dc){
+              icache.erase(icache.begin() + j);
+            }
           }
+          i = (i + 1) % ROB_SIZE;
         }
-        i = (i + 1) % ROB_SIZE;
+      }else {
+      if (d) cout << "no instruction squashing\n";
       }
-    }else {
-    if (d) cout << "no instruction squashing\n";
     }
-  }
-  int rv;
-  
-  //beu
-  rv = beu(); 
-  assert(rv == 0);
-  
-  if (d) cout << "branch fu completed \n";
-  
-  //lswb
-  if (! s_ls_flag){
-    latch_c[LSWB] = latch_c[LSU2];
-  } else {
-    latch_c[LSWB] = NULL;
-  }
-  rv = lswb(latch_c[LSWB]);
-  assert(rv == 0);
-  
-  if (d) cout << "l/s write back completed \n";
-  
-  //ls2 & ls1
-  if (! s_ls_flag){
-    latch_c[LSU2] = latch_c[LSU1];
-    rv = lsu2(latch_c[LSU2]);
-    assert(rv ==0);
-    rv = lsu1();
+    int rv;
+
+    //beu
+    rv = beu(); 
     assert(rv == 0);
-  } else{
-    rv = lsu2(latch_c[LSU2]);
+
+    if (d) cout << "branch fu completed \n";
+
+    //lswb
+    if (! s_ls_flag){
+      latch_c[LSWB] = latch_c[LSU2];
+    } else {
+      latch_c[LSWB] = NULL;
+    }
+    rv = lswb(latch_c[LSWB]);
     assert(rv == 0);
-    if (latch_c[LSU1] == NULL){
+
+    if (d) cout << "l/s write back completed \n";
+
+    //ls2 & ls1
+    if (! s_ls_flag){
+      latch_c[LSU2] = latch_c[LSU1];
+      rv = lsu2(latch_c[LSU2]);
+      assert(rv ==0);
       rv = lsu1();
       assert(rv == 0);
+    } else{
+      rv = lsu2(latch_c[LSU2]);
+      assert(rv == 0);
+      if (latch_c[LSU1] == NULL){
+        rv = lsu1();
+        assert(rv == 0);
+      }
     }
-  }
-  
-  if (d) cout << "l/s units completed \n";
-  
-  //mwb
-  if (counter == 0){
-    latch_c[MFUWB] = latch_c[MFU];
-    rv = mfuwb(latch_c[MFUWB]);
-    assert(rv == 0);
-    latch_c[MFU] = NULL;
-  }
-  //mlu
-  rv = mfu(latch_c[MFU]);
-  assert(rv==0);
-  
-  if (d) cout << "multiply units completed \n";
-  
-  //aluwb
-  latch_c[ALUWB] = latch_c[ALU2];
-  aluwb(latch_c[ALUWB]);
-  
-  //alu2
-  latch_c[ALU2] = latch_c[ALU1];
-  alu2(latch_c[ALU2]);
-  
-  //alu1
-  alu1();
-  
-  //dispatch & decode & fetch
-  Instruction f;
-  if (b_flag){
-    latch_c[DECODE] = latch_c[DISPATCH] = NULL;
-    fetch_c = branch_target;
-    rv = fetch(&f);
-    assert(rv == 0);
-    if (latch_c[FETCH] != NULL){
-      icache.push_back(f);
-      latch_c[FETCH] = &icache.back();
-    }
-  } else if (s_d_flag){
-    rv = dispatch(latch_c[DISPATCH]);
-    assert(rv == 0);
-  }else {
-    fetch_c = fetch_c + 1;
-    latch_c[DISPATCH] = latch_c[DECODE];
-    latch_c[DECODE] = latch_c[FETCH];
-    rv = dispatch(latch_c[DISPATCH]);
-    assert(rv ==0);
-    rv = decode(latch_c[DECODE]);
-    assert(rv ==0);
-    if (d && latch_c[DECODE]!= NULL) cout << "decode decoded: " << latch_c[DECODE]->name << endl;
-    rv = fetch(&f);
-    if (latch_c[FETCH] != NULL){
-      icache.push_back(f);
-      latch_c[FETCH] = &icache.back();
-      if (d) cout << "fetch found: " << latch_c[FETCH]->name << endl; 
-    }
-  }
-  
-  if (d) cout << "dispatch, decode & fetch completed \n";
 
-  //retirement  
-  if (ROB[rob_head].valid && ROB[rob_head].finished){
-    if (d) cout << "retiring: " << ROB[rob_head].inst->name;
-    
-    urf[ROB[rob_head].renaming].valid = false;
-    RRAT[ROB[rob_head].inst->dest_ar] = ROB[rob_head].inst->dest;
-    FL.push(ROB[rob_head].renaming);
-    ROB[rob_head].valid = false;
-    rob_head = (rob_head + 1) % ROB_SIZE;
+    if (d) cout << "l/s units completed \n";
+
+    //mwb
+    if (counter == 0){
+      latch_c[MFUWB] = latch_c[MFU];
+      rv = mfuwb(latch_c[MFUWB]);
+      assert(rv == 0);
+      latch_c[MFU] = NULL;
+    }
+    //mlu
+    rv = mfu(latch_c[MFU]);
+    assert(rv==0);
+
+    if (d) cout << "multiply units completed \n";
+
+    //aluwb
+    latch_c[ALUWB] = latch_c[ALU2];
+    aluwb(latch_c[ALUWB]);
+
+    //alu2
+    latch_c[ALU2] = latch_c[ALU1];
+    alu2(latch_c[ALU2]);
+
+    //alu1
+    alu1();
+
+    //dispatch & decode & fetch
+    Instruction f;
+    if (b_flag){
+      latch_c[DECODE] = latch_c[DISPATCH] = NULL;
+      fetch_c = branch_target;
+      rv = fetch(&f);
+      assert(rv == 0);
+      if (latch_c[FETCH] != NULL){
+        icache.push_back(f);
+        latch_c[FETCH] = &icache.back();
+      }
+    } else if (s_d_flag){
+      rv = dispatch(latch_c[DISPATCH]);
+      assert(rv == 0);
+    }else {
+      fetch_c = fetch_c + 1;
+      latch_c[DISPATCH] = latch_c[DECODE];
+      latch_c[DECODE] = latch_c[FETCH];
+      rv = dispatch(latch_c[DISPATCH]);
+      assert(rv ==0);
+      rv = decode(latch_c[DECODE]);
+      assert(rv ==0);
+      if (d && latch_c[DECODE]!= NULL) cout << "decode decoded: " << latch_c[DECODE]->name << endl;
+      rv = fetch(&f);
+      if (latch_c[FETCH] != NULL){
+        icache.push_back(f);
+        latch_c[FETCH] = &icache.back();
+        if (d) cout << "fetch found: " << latch_c[FETCH]->name << endl; 
+      }
+    }
+
+    if (d) cout << "dispatch, decode & fetch completed \n";
+
+    //retirement  
+    if (ROB[rob_head].valid && ROB[rob_head].finished){
+      if (d) cout << "retiring: " << ROB[rob_head].inst->name;
+      if (ROB[rob_head].inst->type == HALT) eoe_flag = true;
+      urf[ROB[rob_head].renaming].valid = false;
+      RRAT[ROB[rob_head].inst->dest_ar] = ROB[rob_head].inst->dest;
+      FL.push(ROB[rob_head].renaming);
+      ROB[rob_head].valid = false;
+      rob_head = (rob_head + 1) % ROB_SIZE;
+    }
+  } else {
+    cout << "execution is done\n";
   }
-    
   dispatch_cycle ++;
   
   if (d) cout << "end of cycle: " << dispatch_cycle <<endl;
@@ -733,6 +791,7 @@ void init (){
   for (int i = 0; i < 13; i++){
     latch_c[i] = NULL;
   }
+  eoe_flag = false;
   icache.reserve(50000);
   dispatch_cycle = 0;
   b_flag = false;
@@ -820,8 +879,20 @@ int main (int argc, char *argv[]) {
     for (int i = 0; i < input.length(); i++) input[i] = toupper(input[i]);
     if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     if (input[0] == 's' || input[0] == 'S'){
+<<<<<<< HEAD
+      if (input.find_first_of("0987654321", 1) != string::npos){
+      int j = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
+        for (int i = 0; i < j; i++){
+          simulate();
+        }
+      } else {
+        simulate();
+      }
+    }else if (input[0] == 'i' || input[0] == 'I'){
+=======
       simulate();
     } else if (input[0] == 'i' || input[0] == 'I'){
+>>>>>>> 701689385d57de4d791dad0f50c324b4add7efbe
       init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
