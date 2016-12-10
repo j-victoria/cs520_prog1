@@ -15,3 +15,4 @@ to any function unit, number of LOAD and STORE instructions committed (separatel
 - debuggin!
 - make simulate stop on halt
 - take more input instructions ( like multiple simulates)
+- fix init :(
