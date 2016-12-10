@@ -912,15 +912,15 @@ int main (int argc, char *argv[]) {
       } else {
         simulate();
       }
-    } else if (input[0] == 'i' || input[0] == 'I'){
-      init();
+      }else if (inpt[0] == 'i' || input[0] == 'I'){
+	init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
     } else if (input == "PRINT_IQ"){
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
-    } else if (input == "PRINT_MEMORY") {
+    //} else if (input == "PRINT_MEMORY") {
       // make print_memory work with 2 integer arguments
     } else {
       // nothing here yet

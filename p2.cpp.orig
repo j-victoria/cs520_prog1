@@ -28,13 +28,8 @@ int RRAT[17];
 iqe IQ[IQ_SIZE];
 robe ROB[ROB_SIZE];
 int rob_head, rob_tail;
-<<<<<<< HEAD
-int memory[1000];
-priority_queue<int, vector<int>, std::greater<int> > FL;
-=======
 int memory[MEM_SIZE];
-priority_queue<int> FL;
->>>>>>> 701689385d57de4d791dad0f50c324b4add7efbe
+priority_queue<int, vector<int>, std::greater<int> > FL;
 
 #define DECODE 0
 #define DISPATCH 1
@@ -284,6 +279,11 @@ int dispatch (Instruction * inst){
         rn = RAT[inst->dest_ar];
         inst->dest = RAT[inst->dest_ar] = FL.top();
         FL.pop();
+        urf[inst->dest].producer = inst;
+        urf[inst->dest].consumer1.clear();
+        urf[inst->dest].consumer1.push_back(NULL);
+        urf[inst->dest].consumer2.clear();
+        urf[inst->dest].consumer2.push_back(NULL); 
       }
       if (d) cout << "setting up IQ entry\n";
       IQ[i].inst = inst;
@@ -378,22 +378,22 @@ int alu2 (Instruction * inst){
         exit(0);
         break;
     }
-    for (int i = 0; i < urf[inst->dest].consumer1.size(); i++){
-      if (!(urf[inst->dest].consumer1[i]->src1)){
-        urf[inst->dest].consumer1[i]->src1_v = inst->res;
-        urf[inst->dest].consumer1[i]->src1 = true;
-        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;
-        urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
-        
+    while(!urf[inst->dest].consumer1.empty()&& urf[inst->dest].consumer1.back() != NULL){
+      Instruction * con = urf[inst->dest].consumer1.back();
+      if (!(con->src1)){
+        con->src1_v = inst->res;
+        con->src1 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << con->name <<endl;
+        urf[inst->dest].consumer1.pop_back();
       }
     }
-    for (int i = 0; i < urf[inst->dest].consumer2.size(); i++){
-      if (!(urf[inst->dest].consumer2[i]->src2)){
-        urf[inst->dest].consumer2[i]->src2_v = inst->res;
-        urf[inst->dest].consumer2[i]->src2 = true;
-        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
-        urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
-        
+     while(!urf[inst->dest].consumer2.empty()&& urf[inst->dest].consumer2.back() != NULL){
+      Instruction * con = urf[inst->dest].consumer2.back();
+      if (!(con->src2)){
+        con->src2_v = inst->res;
+        con->src2 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << con->name <<endl;
+        urf[inst->dest].consumer1.pop_back();
       }
     }
   if (d) cout << "alu2 calculated result for: " << inst->name << ": " << inst->res << endl;
@@ -443,22 +443,22 @@ int mfu (Instruction * inst){
   } else if (counter == 3){
     inst->res = inst->src1_v * inst->src2_v;
     if (d) cout << "mfu found a result for " << inst->name << ": " << inst->res << endl;
-    for (int i = 0; i < urf[inst->dest].consumer1.size(); i++){
-      if (!(urf[inst->dest].consumer1[i]->src1)){
-        urf[inst->dest].consumer1[i]->src1_v = inst->res;
-        urf[inst->dest].consumer1[i]->src1 = true;
-        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;
-        urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
-       
+    while(!urf[inst->dest].consumer1.empty()&& urf[inst->dest].consumer1.back() != NULL){
+      Instruction * con = urf[inst->dest].consumer1.back();
+      if (!(con->src1)){
+        con->src1_v = inst->res;
+        con->src1 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << con->name <<endl;
+        urf[inst->dest].consumer1.pop_back();
       }
     }
-    for (int i = 0; i < urf[inst->dest].consumer2.size(); i++){
-      if (!(urf[inst->dest].consumer2[i]->src2)){
-        urf[inst->dest].consumer2[i]->src2_v = inst->res;
-        urf[inst->dest].consumer2[i]->src2 = true;
-        if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
-        urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
-
+    while(!urf[inst->dest].consumer2.empty()&& urf[inst->dest].consumer2.back() != NULL){
+      Instruction * con = urf[inst->dest].consumer2.back();
+      if (!(con->src2)){
+        con->src2_v = inst->res;
+        con->src2 = true;
+        if (d) cout <<"forwarded result " << inst->res << " to " << con->name <<endl;
+        urf[inst->dest].consumer1.pop_back();
       }
     }
    counter = 0;
@@ -484,6 +484,7 @@ int lsu1(){
   Instruction * inst = NULL;
   int min = 10000000;
   int index;
+  if(d) cout << "searching for an instruction for lsu1 \n";
   for (int i = 0; i < IQ_SIZE; i ++){
     if(IQ[i].valid){
       if (IQ[i].inst->src1 && IQ[i].inst->src2 && (IQ[i].inst->type == LOAD || IQ[i].inst->type == STORE) && IQ[i].inst->dc < min){
@@ -514,26 +515,38 @@ int lsu2(Instruction * inst){
       if (inst->type == LOAD){
         inst->res = memory[inst->res/4];
         if (d) cout << "data retrived from memory: " << inst->res << ": " << inst->name << endl;
-        for (int i = 0; i < urf[inst->dest].consumer1.size(); i++){
-          if (!(urf[inst->dest].consumer1[i]->src1)){
-            urf[inst->dest].consumer1[i]->src1_v = inst->res;
-            urf[inst->dest].consumer1[i]->src1 = true;
-             if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1[i]->name <<endl;           
-            urf[inst->dest].consumer1.erase(urf[inst->dest].consumer1.begin()+i);
+        while(!urf[inst->dest].consumer1.empty() && urf[inst->dest].consumer1.back() != NULL){
+          //Instruction * con = urf[inst->dest].consumer1.back();
+          if (!(urf[inst->dest].consumer1.back()->src1)){
+            urf[inst->dest].consumer1.back()->src1_v = inst->res;
+            urf[inst->dest].consumer1.back()->src1 = true;
+            if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer1.back()->name <<endl;
+            urf[inst->dest].consumer1.pop_back();
+          }
+          if (d) cout << inst << endl;
+        }
+        if (d) cout << "1 " << inst << endl;
+        if (d) cout << "2 " << inst->dest << endl;
+        if (d) cout << "3 " << &urf[inst->dest] << endl;
+        if (d) cout << "4 " << urf[inst->dest].value << endl;
+        if (d) cout << "5 " << urf[inst->dest].consumer2.size() << endl;
+        while(!urf[inst->dest].consumer2.empty() && urf[inst->dest].consumer2.back() != NULL){
+          if (d) cout << "1";
+          Instruction * con = urf[inst->dest].consumer2.back();
+          if (d) cout << "2";
+          if (!(con->src2)){
+            if (d) cout << "3";
+            con->src2_v = inst->res;
+            if (d) cout << "4\n";
+            con->src2 = true;
+            if (d) cout <<"forwarded result " << inst->res << " to " << con->name <<endl;
+            urf[inst->dest].consumer1.pop_back();
           }
         }
-        for (int i = 0; i < urf[inst->dest].consumer2.size(); i++){
-          if (!(urf[inst->dest].consumer2[i]->src2)){
-            urf[inst->dest].consumer2[i]->src2_v = inst->res;
-            urf[inst->dest].consumer2[i]->src2 = true;
-            if (d) cout <<"forwarded result " << inst->res << " to " << urf[inst->dest].consumer2[i]->name <<endl;
-            urf[inst->dest].consumer2.erase(urf[inst->dest].consumer2.begin()+i);
-            
-          }
-        }
+        if (d) cout <<"done forwarding2" << endl;
       }else if (inst->type == STORE){
         memory[inst->res/4] = inst->src1_v;
-        if (d) cout << "date stored "<< inst->src1_v << " at " << inst->res << ": "<< inst->name <<endl;
+        if (d) cout << "data stored "<< inst->src1_v << " at " << inst->res << ": "<< inst->name <<endl;
       }else {
         cout << "??? DANGER WILL ROBINSON!\n";
         exit(0);
@@ -554,7 +567,7 @@ int lswb(Instruction * inst){
       urf[inst->dest].value = inst->res;
       urf[inst->dest].valid = true;
       
-      if (d) cout << inst->name <<" wrote to memory\n";
+      if (d) cout << inst->name <<" wrote to memory value " << inst->res << " to " << inst->dest;
     }
     ROB[inst->rob_loc].finished = true;
   }
@@ -682,11 +695,13 @@ int simulate(){
       latch_c[LSU2] = latch_c[LSU1];
       rv = lsu2(latch_c[LSU2]);
       assert(rv ==0);
+      if (d) cout << "done with ls2\n";
       rv = lsu1();
       assert(rv == 0);
     } else{
       rv = lsu2(latch_c[LSU2]);
       assert(rv == 0);
+      if (d) cout << "done with ls2\n";
       if (latch_c[LSU1] == NULL){
         rv = lsu1();
         assert(rv == 0);
@@ -754,11 +769,14 @@ int simulate(){
 
     //retirement  
     if (ROB[rob_head].valid && ROB[rob_head].finished){
-      if (d) cout << "retiring: " << ROB[rob_head].inst->name;
+      if (d) cout << "retiring: " << ROB[rob_head].inst->name << endl;
       if (ROB[rob_head].inst->type == HALT) eoe_flag = true;
-      urf[ROB[rob_head].renaming].valid = false;
+      if (ROB[rob_head].renaming!= ND){
+        urf[ROB[rob_head].renaming].valid = false;
+        FL.push(ROB[rob_head].renaming);
+        if (d) cout << "freeing PR" << ROB[rob_head].renaming << endl;
+      }
       RRAT[ROB[rob_head].inst->dest_ar] = ROB[rob_head].inst->dest;
-      FL.push(ROB[rob_head].renaming);
       ROB[rob_head].valid = false;
       rob_head = (rob_head + 1) % ROB_SIZE;
     }
@@ -776,6 +794,9 @@ void init (){
   for (int i = 0; i < 33; i++){
     urf[i].value = 0;
     urf[i].valid = false;
+    urf[i].consumer1.resize(0);
+    urf[i].consumer2.resize(0);
+    
     FL.push(i);
   }
   for (int i = 0; i < IQ_SIZE; i ++){
@@ -791,6 +812,9 @@ void init (){
   fetch_c = fetch_n = -1;
   for (int i = 0; i < 13; i++){
     latch_c[i] = NULL;
+  }
+  for (int i = 0; i < 17; i++){
+    RAT[i] = RRAT[i] = ND;
   }
   eoe_flag = false;
   icache.reserve(50000);
@@ -880,7 +904,6 @@ int main (int argc, char *argv[]) {
     for (int i = 0; i < input.length(); i++) input[i] = toupper(input[i]);
     if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     if (input[0] == 's' || input[0] == 'S'){
-<<<<<<< HEAD
       if (input.find_first_of("0987654321", 1) != string::npos){
       int j = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
         for (int i = 0; i < j; i++){
@@ -889,11 +912,11 @@ int main (int argc, char *argv[]) {
       } else {
         simulate();
       }
-    }else if (input[0] == 'i' || input[0] == 'I'){
-=======
-      simulate();
+<<<<<<< HEAD
     } else if (input[0] == 'i' || input[0] == 'I'){
->>>>>>> 701689385d57de4d791dad0f50c324b4add7efbe
+=======
+    }else if (input[0] == 'i' || input[0] == 'I'){
+>>>>>>> 527181035d844dd0c8855f14618b5f44a307f8e7
       init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
@@ -901,7 +924,7 @@ int main (int argc, char *argv[]) {
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
-    } else if (input == "PRINT_MEMORY") {
+    //} else if (input == "PRINT_MEMORY") {
       // make print_memory work with 2 integer arguments
     } else {
       // nothing here yet
