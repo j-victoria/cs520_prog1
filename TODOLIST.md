@@ -9,7 +9,11 @@ a1 to a2, both inclusive. The addresses a1 and a2 are at 4 Byte boundaries.
 cycles for which dispatched has stalled, the number of cycles for which no issues have taken place
 to any function unit, number of LOAD and STORE instructions committed (separately).
 
-- Fix ptr problem 
+- ~Fix ptr problem ~ (thanks marvin)
 - test iq
 - test ROB 
 - debuggin!
+- make simulate stop on halt
+- take more input instructions ( like multiple simulates)
+- fix init :(
+- back to back execution
