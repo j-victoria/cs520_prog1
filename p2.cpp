@@ -16,6 +16,7 @@ using namespace std;
 
 #define IQ_SIZE 12
 #define ROB_SIZE 40
+#define MEM_SIZE 1000
 
 #define REG_X 16
 #define ND -500
@@ -27,7 +28,7 @@ int RRAT[17];
 iqe IQ[IQ_SIZE];
 robe ROB[ROB_SIZE];
 int rob_head, rob_tail;
-int memory[1000];
+int memory[MEM_SIZE];
 priority_queue<int> FL;
 
 #define DECODE 0
@@ -795,7 +796,13 @@ void print_iq (){
 }
 
 void print_memory(int a1, int a2) {
-  //
+  if(a1 < a2 && a2 < MEM_SIZE * 4) {
+    for(int i = a1; i <= a2; i+= 4) {
+      cout << "Memory at address " << i << ": " << memory[i / 4] << endl;
+    }
+  } else {
+    cout << "Invalid input to print_memory" << endl;
+  }
 }
 
 int main (int argc, char *argv[]) {
@@ -814,16 +821,18 @@ int main (int argc, char *argv[]) {
     if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     if (input[0] == 's' || input[0] == 'S'){
       simulate();
-    }else if (input[0] == 'i' || input[0] == 'I'){
+    } else if (input[0] == 'i' || input[0] == 'I'){
       init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
-    }else if (input == "PRINT_IQ"){
+    } else if (input == "PRINT_IQ"){
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
       if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
-    }else {
-      
+    } else if (input == "PRINT_MEMORY") {
+      // make print_memory work with 2 integer arguments
+    } else {
+      // nothing here yet
     }
     
   }while(true);
