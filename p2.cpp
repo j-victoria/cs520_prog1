@@ -879,7 +879,6 @@ int main (int argc, char *argv[]) {
     for (int i = 0; i < input.length(); i++) input[i] = toupper(input[i]);
     if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     if (input[0] == 's' || input[0] == 'S'){
-<<<<<<< HEAD
       if (input.find_first_of("0987654321", 1) != string::npos){
       int j = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
         for (int i = 0; i < j; i++){
@@ -889,10 +888,6 @@ int main (int argc, char *argv[]) {
         simulate();
       }
     }else if (input[0] == 'i' || input[0] == 'I'){
-=======
-      simulate();
-    } else if (input[0] == 'i' || input[0] == 'I'){
->>>>>>> 701689385d57de4d791dad0f50c324b4add7efbe
       init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
