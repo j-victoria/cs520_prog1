@@ -1,36 +1,15 @@
-# TO DO LIST
+ - Set_URF_size < n>: used before simulation to set the number of registers in the unified register file
+to n.
+ - Print_map_tables: prints front rename table and back-end register alias table.
+ - Print_ROB: prints current ROB contents, one entry per line.
+ - Print_URF: Prints contents of URF and their status (allocated, committed, free)
+ - Print_Memory <a1> <a2>: prints out contents of memory locations with addresses ranging from
+a1 to a2, both inclusive. The addresses a1 and a2 are at 4 Byte boundaries.
+ - Print_Stats: prints the IPC realized up to the point where this command is invoked, the number of
+cycles for which dispatched has stalled, the number of cycles for which no issues have taken place
+to any function unit, number of LOAD and STORE instructions committed (separately).
 
-## Overall
-Marvin: Documentation, refactoring
-
-Jay: Coding etc.
-
-## Parts
-Reading in ASCII input file: Needs to be changed to read filename from command line instead of user prompt
-
-Also: Handling pipeline when the last instruction in a file is in the pipeline (avoiding out of bounds instruction access)
-
-fetch(): mostly good
-
-decode(): ~~BZ/BNZ zero flag dependencies (+ register-with-most-recently-set-zero-flag pointer register), X register dependencies, dependencies all around!!!!!!~~
-
-alu1(): 
-
-alu2():
-
-beu(): ~~calculating branch target address~~
-
-delay(): ~~NOP squashing~~
-
-mem():
-
-wb():
-
-main(): ~~adjust Clearing out to handle all globals~~
-        ~~add in 'end of processing' handleing'~~
-        add in error processing
-        command processing???
-
-general debugging.
-
-Hi - Fixed the seg fault problem - had to do with me having a fundamental misunderstanding of C++ - which I then discovered and fixed so it is super buggy rn but will not crash (as far as i've determined) - Jay
+- Fix ptr problem 
+- test iq
+- test ROB 
+- debuggin!
