@@ -16,3 +16,4 @@ to any function unit, number of LOAD and STORE instructions committed (separatel
 - make simulate stop on halt
 - take more input instructions ( like multiple simulates)
 - fix init :(
+- back to back execution
