@@ -683,7 +683,7 @@ int simulate(){
     assert(rv ==0);
     rv = decode(latch_c[DECODE]);
     assert(rv ==0);
-    if (d && latch_c[DECODE]!= NULL) cout << "decode decoded: " << latch_c[DECODE] << endl;
+    if (d && latch_c[DECODE]!= NULL) cout << "decode decoded: " << latch_c[DECODE]->name << endl;
     rv = fetch(&f);
     if (latch_c[FETCH] != NULL){
       icache.push_back(f);
@@ -732,6 +732,7 @@ void init (){
   for (int i = 0; i < 13; i++){
     latch_c[i] = NULL;
   }
+  icache.reserve(50000);
   dispatch_cycle = 0;
   b_flag = false;
   s_d_flag = false;  //there is a stall in dispatch
@@ -806,7 +807,7 @@ int main (int argc, char *argv[]) {
     //input_t.resize(input.length());
     //transform(input.begin(), input.end(), input_t.begin(), toupper);
     for (int i = 0; i < input.length(); i++) input[i] = toupper(input[i]);
-    
+    if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     if (input[0] == 's' || input[0] == 'S'){
       simulate();
     }else if (input[0] == 'i' || input[0] == 'I'){
@@ -814,7 +815,9 @@ int main (int argc, char *argv[]) {
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
     }else if (input == "PRINT_IQ"){
+      if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
+      if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     }else {
       
     }
