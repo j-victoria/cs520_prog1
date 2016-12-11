@@ -17,11 +17,14 @@ using namespace std;
 #define IQ_SIZE 12
 #define ROB_SIZE 40
 #define MEM_SIZE 1000
+#define URF_SIZE 33
 
 #define REG_X 16
 #define ND -500
 
-Register urf[33];
+
+
+Register urf[URF_SIZE];
 vector<Instruction> icache;
 int RAT[17];
 int RRAT[17];
@@ -613,14 +616,20 @@ int beu(){
     inst->latch_loc = BEU;
     inst->in_iq = false;
     IQ[index].valid = false;
-  
+  	
     switch(inst->type){
       case BZ:
-        if (inst->src1 == 0) b_flag = true; inst->branch_taken = true;
+        if (inst->src1_v == 0) {
+					b_flag = true; 
+					inst->branch_taken = true;
+				}
         branch_target = inst->res = inst->index + (inst->lit / 4);
         break;
       case BNZ:
-        if (inst->src1 != 0 ) b_flag = true;inst->branch_taken = true;
+        if (inst->src1_v != 0 ){
+					b_flag = true; 
+					inst->branch_taken = true;
+				}
         branch_target = inst->res = inst->index + (inst->lit / 4);
         break;
       case BAL: case JUMP :
@@ -742,15 +751,20 @@ int simulate(){
 
     //retirement  
     if (ROB[rob_head].valid && ROB[rob_head].finished){
-      if (d) cout << "retiring: " << ROB[rob_head].inst->name << endl;
-      if (ROB[rob_head].inst->type == HALT) eoe_flag = true;
+      if (d) cout << "retiring: " << ROB[rob_head].inst->name << " at " << rob_head << endl;
+      if (ROB[rob_head].inst->type == HALT){
+				eoe_flag = true;
+				cout << "execution is done\n";
+			} 
       if (ROB[rob_head].renaming!= ND){
         urf[ROB[rob_head].renaming].valid = false;
         FL.push(ROB[rob_head].renaming);
         if (d) cout << "freeing PR" << ROB[rob_head].renaming << endl;
-				RRAT[ROB[rob_head].inst->dest_ar] = ROB[rob_head].inst->dest;
+				
       }
-      
+      if (ROB[rob_head].inst->dest != ND){
+				RRAT[ROB[rob_head].inst->dest_ar] = ROB[rob_head].inst->dest;
+			}
       if ((ROB[rob_head].inst->type == BAL || ROB[rob_head].inst->type == JUMP || ROB[rob_head].inst->type == BZ || ROB[rob_head].inst->type == BNZ) && ROB[rob_head].inst->branch_taken){
 				if(d) cout << "ITS A BRANCH TAKE LETS FUCK IT ALL UP\n";
 				for (int i = 0; i < IQ_SIZE; i++){
@@ -770,18 +784,21 @@ int simulate(){
 					ROB[i].valid = false;
 				}
 				b_flag = false;
-				fetch_c = branch_target;
+				fetch_c = branch_target - 1;
+				ROB[rob_head].valid = false;
+				rob_head = rob_tail;
+			} else {
+				ROB[rob_head].valid = false;
+      	rob_head = (rob_head + 1) % ROB_SIZE;
 			}
-			ROB[rob_head].valid = false;
-      rob_head = (rob_head + 1) % ROB_SIZE;
-			
     }
-  } else {
-    cout << "execution is done\n";
-  }
   dispatch_cycle ++;
   
   if (d) cout << "end of cycle: " << dispatch_cycle <<endl;
+	} else {
+    
+  }
+  
   
   return 0;
 }
@@ -901,6 +918,48 @@ void print_memory(int a1, int a2) {
   }
 }
 
+void print_rob(){
+	int i = rob_head; 
+	cout << "head: " << rob_head << " tail: " << rob_tail << endl;
+	while (ROB[i].valid){
+		cout << i << ": " << ROB[i].inst->name << endl;
+		i = (i + 1) % ROB_SIZE;
+	}
+	return;
+}
+
+void print_map_tables(){
+	for (int i = 0; i < 17; i++){
+		cout << i << ": RAT ";
+		if (RAT[i] != ND){
+			cout << RAT[i];
+		} else{
+			cout << "i";
+		}
+		cout << " RRAT ";
+		if (RRAT[i] != ND){
+			cout << RRAT[i] << " ";
+		}else {
+			cout << "i ";
+		}
+		if (i%3 == 2 ) cout << endl;
+	}
+	
+}
+
+void print_urf(){
+	for (int i = 0; i < URF_SIZE; i++){
+		cout << "P" << i << ": ";
+		if (urf[i].valid){
+			cout << urf[i].value << " ";
+		}else {
+			cout << "i ";
+		}
+		if (i % 5 == 4) cout << endl;
+	}
+	return;
+}
+
 /**
  * Main method.
  * Takes one argument (filename of instruction text file).
@@ -933,12 +992,16 @@ int main (int argc, char *argv[]) {
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
     } else if (input == "PRINT_IQ"){
-      if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
       print_iq();
-      if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
     //} else if (input == "PRINT_MEMORY") {
       // make print_memory work with 2 integer arguments
-    } else {
+		} else if (input == "PRINT_ROB"){
+			print_rob();
+		}else if (input == "PRINT_URF"){
+			print_urf();
+		}else if (input == "PRINT_MAP_TABLES"){
+			print_map_tables();
+		} else {
       // nothing here yet
     }
     
