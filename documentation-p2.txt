@@ -1,0 +1,15 @@
+CS520 Project 2
+12 December 2016
+Jay Victoria (jvictor5)
+Marvin Vinluan (mvinlua1)
+
+Design Document
+
+> p2.cpp ###################### Are we changing the filename later?
+Responsible for user interface, reading input file, and simulating pipeline stages.
+
+> util.h
+Defines data structures representing instructions, registers, and IQ/RAT/ROB entries.
+
+> instructions.h
+Defines an enumeration representing the different types of instructions.
