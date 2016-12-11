@@ -1,3 +1,4 @@
 MOVC R1, #4
 MOVC R2, #5
 ADD R3, R1, R2
+HALT

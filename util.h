@@ -6,7 +6,7 @@ using namespace std;
 
 typedef struct instruction_t {
   int dest, src1_v, src1_a, src2_v, src2_a, lit, res, index, dc, rob_loc, dest_ar, iq_loc, latch_loc;
-  bool src1, src2, valid, in_iq;
+  bool src1, src2, valid, in_iq, branch_taken;
   enum instructions_t type;
   string name;
 }Instruction;
@@ -17,7 +17,6 @@ typedef struct reg {
   int value;
   bool valid;
   Instruction * producer;
-  
 }Register;
 
 typedef struct iq_entry {
