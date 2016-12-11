@@ -912,8 +912,8 @@ int main (int argc, char *argv[]) {
       } else {
         simulate();
       }
-      }else if (inpt[0] == 'i' || input[0] == 'I'){
-	init();
+    } else if (inpt[0] == 'i' || input[0] == 'I'){
+	    init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
     } else if (input == "PRINT_IQ"){
