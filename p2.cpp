@@ -62,8 +62,12 @@ vector<string> imem;
 Instruction * z_ptr;
 bool eoe_flag;
 
+/**
+ * fetch
+ * Simulates the FETCH stage.
+ */
 int fetch (Instruction * inst){
-  //fills in an empty instruction with the instruction sting/name
+  //fills in an empty instruction with the instruction string/name
   //from file (i.e. to simulate from memory)
   if (d) cout << "fetching...\n";
   if (fetch_c == 0){
@@ -107,6 +111,10 @@ int fetch (Instruction * inst){
   return 0;
 }
 
+/**
+ * decode
+ * Simulates the D/RF stage.
+ */
 int decode (Instruction * inst){
   //decode stuff
   // grab sources from the urf
@@ -173,7 +181,7 @@ int decode (Instruction * inst){
               exit(0);
               break;
           }
-        } else if ( r == 2){
+        } else if (r == 2){
           switch(inst->type){
             case ADD: case SUB: case MUL: case AND: case OR: case EX_OR: case LOAD:
               inst->src1_a = RAT[ar];
