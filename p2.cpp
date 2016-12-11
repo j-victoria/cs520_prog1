@@ -833,6 +833,10 @@ void init (){
   last_branch = NULL;
 }
 
+/**
+ * display
+ * Prints the status of each pipeline stage and each physical register.
+ */
 void display () {
   cout << "Fetch: " << fetch_c;
   cout << "Decode: " << (latch_c[DECODE] == NULL? "nothing." : latch_c[DECODE]->name) << endl;
@@ -891,6 +895,11 @@ void print_iq (){
   }
 }
 
+/**
+  * print_memory
+  * Prints contents of memory addresses a1 through a2, inclusive.
+  * Assumes a1, a2 located on 4 byte boundaries.
+  */
 void print_memory(int a1, int a2) {
   if(a1 < a2 && a2 < MEM_SIZE * 4) {
     for(int i = a1; i <= a2; i+= 4) {
@@ -943,6 +952,10 @@ void print_urf(){
 	return;
 }
 
+/**
+ * Main method.
+ * Takes one argument (filename of instruction text file).
+ */
 int main (int argc, char *argv[]) {
   string input;
   file_name = argv[1];
