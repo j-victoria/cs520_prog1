@@ -23,8 +23,8 @@ using namespace std;
 #define ND -500
 
 
-
-Register urf[URF_SIZE];
+int urf_s = 32;
+vector<Register> urf;
 vector<Instruction> icache;
 int RAT[17];
 int RRAT[17];
@@ -66,7 +66,7 @@ Instruction * z_ptr;
 bool eoe_flag;
 bool s_ls_1;
 
-int stall_dis, no_is, loads, stores;
+int stall_dis, no_is, loads, stores, instructions;
 
 /**
  * fetch
@@ -155,7 +155,7 @@ int decode (Instruction * inst){
       }
       int r = 1, j = 0;
 
-      while (j < inst->name.length() && j != string::npos){
+      while (j < inst->name.length() - 1 && j != string::npos){
         j = inst->name.find_first_of("0123456789", j + 1);
         int ar = 0; 
         int sign = ((inst->name)[j-1] == '-'? -1 : 1);
@@ -164,10 +164,12 @@ int decode (Instruction * inst){
           j++;
         }
         ar = ar * sign;
+				cout << "found number : " << ar << endl;
         if (r == 1){  //this is the first number we came across
           switch(inst->type){
             case ADD : case SUB : case MUL : case AND : case OR : case EX_OR : case MOVC : case LOAD :
               inst->dest_ar = ar;
+							
               break;
             case STORE : case BAL :
               inst->src1_a = RAT[ar];
@@ -310,7 +312,12 @@ int dispatch (Instruction * inst){
       if (d) cout << "setting up ROB entry\n";
       ROB[rob_tail].inst = inst;
       ROB[rob_tail].valid = true;
-      if (inst->dest_ar != ND) ROB[rob_tail].renaming = rn;
+			ROB[rob_tail].finished = false;
+      if (inst->dest_ar != ND) {
+				ROB[rob_tail].renaming = rn;
+			} else {
+				ROB[rob_tail].renaming = ND;
+			}
       inst->rob_loc = rob_tail;
       rob_tail = (rob_tail + 1) % ROB_SIZE;
       if (inst->type == HALT) ROB[inst->rob_loc].finished = true;
@@ -746,6 +753,7 @@ int simulate(){
         assert(rv == 0);
 			}
 		}	
+		if (latch_c[ALU1] == NULL && (latch_c[LSU1] == NULL) && latch_c[BEU] == NULL && counter != 1) no_is++;
     //dispatch & decode & fetch
     Instruction f;
     if (b_flag){
@@ -778,6 +786,7 @@ int simulate(){
 
     //retirement  
     if (ROB[rob_head].valid && ROB[rob_head].finished){
+			instructions++;
       if (d) cout << "retiring: " << ROB[rob_head].inst->name << " at " << rob_head << endl;
       if (ROB[rob_head].inst->type == HALT){
 				eoe_flag = true;
@@ -805,6 +814,7 @@ int simulate(){
 				for (int i = 0; i <= REG_X; i++){
 					if (RAT[i] != RRAT[i]){
 						urf[RAT[i]].valid = false;
+						if (d) cout << "freeing " << RAT[i] << endl;
 						FL.push(RAT[i]);
 						RAT[i] = RRAT[i];
 					}
@@ -815,7 +825,7 @@ int simulate(){
 				b_flag = false;
 				fetch_c = branch_target - 1;
 				ROB[rob_head].valid = false;
-				rob_head = rob_tail;
+				rob_head = rob_tail = 0;
 			} else {
 				ROB[rob_head].valid = false;
       	rob_head = (rob_head + 1) % ROB_SIZE;
@@ -833,7 +843,8 @@ int simulate(){
 }
 
 void init (){
-  for (int i = 0; i < 33; i++){
+	urf.resize(urf_s);
+  for (int i = 0; i < urf_s; i++){
     urf[i].value = 0;
     urf[i].valid = false;
     urf[i].consumer1.resize(0);
@@ -863,12 +874,12 @@ void init (){
   icache.reserve(50000);
   dispatch_cycle = 0;
   b_flag = false;
-  s_d_flag = false;  //there is a stall in dispatch
-  s_ls_flag = false; //there is a stall in load/store alu
+  s_d_flag = false; 
+  s_ls_flag = false;
   branch_target = 0;
   counter = 0;
   last_branch = NULL;
-	stall_dis =  no_is = loads = stores = 0;
+	instructions = stall_dis =  no_is = loads = stores = 0;
 	s_ls_1 = false;
 }
 
@@ -892,7 +903,11 @@ void display () {
   for (int i = 0; i < 17; i++){
     cout << "AR " << i << ": ";
 		if (RAT[i] != ND){
-			cout << urf[RAT[i]].value;
+			if (urf[RAT[i]].valid){
+				cout << urf[RAT[i]].value;
+			} else {
+				cout << "i";
+			}
 		} else {
 			cout << "i";
 		}
@@ -984,15 +999,32 @@ void print_map_tables(){
 }
 
 void print_urf(){
-	for (int i = 0; i < URF_SIZE; i++){
+	for (int i = 0; i < urf_s; i++){
 		cout << "P" << i << ": ";
+		cout << urf[i].value << " ";
 		if (urf[i].valid){
-			cout << urf[i].value << " ";
+			
+			if (distance(RRAT, find(RRAT, RRAT+17, i)) != 17){
+				cout << "c ";
+			} else if (distance(RAT, find(RAT, RAT+17, i)) != 17){
+				cout << "a ";
+			} else {
+				cout << "f ";
+			}
 		}else {
-			cout << "i ";
+			cout << "f ";
 		}
 		if (i % 5 == 4) cout << endl;
 	}
+	return;
+}
+
+void print_stats(){
+	cout << "IPC: " << ((float)instructions)/dispatch_cycle << endl;
+	cout << "dispatch stalls: "<< stall_dis << endl;
+	cout << "cycles where nothing was issued: " << no_is << endl;
+	cout << "loads commited: " << loads << endl;
+	cout << "stores commited: " << stores<< endl;
 	return;
 }
 
@@ -1023,8 +1055,8 @@ int main (int argc, char *argv[]) {
       } else {
         simulate();
       }
-      }else if (input[0] == 'i' || input[0] == 'I'){
-	init();
+		}else if (input[0] == 'i' || input[0] == 'I'){
+			init();
     } else if (input[0] == 'd' || input[0] == 'D'){
       display();
     } else if (input == "PRINT_IQ"){
@@ -1037,6 +1069,13 @@ int main (int argc, char *argv[]) {
 			print_urf();
 		}else if (input == "PRINT_MAP_TABLES"){
 			print_map_tables();
+		} else if (input.find("SET_URF_SIZE") != string::npos){
+			urf_s = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
+			urf.resize(urf_s);
+		} else if (input == "PRINT_STATS") {
+			print_stats();
+		} else if (input[0] == 'Q'){
+			return 0;
 		} else {
       // nothing here yet
     }
