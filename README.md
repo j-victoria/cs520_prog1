@@ -11,6 +11,8 @@ The commit history of this git repository represents the work log
 
 Screenshots of test_input_1.txt & test_input_2.txt's output is in the image files that start with screen_shot_test_input
 
+q to exit/quit
+
 make 
 to compile 
 
