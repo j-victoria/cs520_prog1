@@ -164,7 +164,7 @@ int decode (Instruction * inst){
           j++;
         }
         ar = ar * sign;
-				cout << "found number : " << ar << endl;
+				if (d) cout << "found number : " << ar << endl;
         if (r == 1){  //this is the first number we came across
           switch(inst->type){
             case ADD : case SUB : case MUL : case AND : case OR : case EX_OR : case MOVC : case LOAD :
@@ -446,6 +446,7 @@ int aluwb (Instruction * inst){
 int mfu (Instruction * inst){
   //takes 4 cycles
   //calcuate & fwd results
+	if (d) cout << counter << endl;
   if (counter == 0){
     int min = 10000000;
     int index;
@@ -465,10 +466,11 @@ int mfu (Instruction * inst){
       inst->in_iq = false;
       IQ[index].valid = false;
       counter++;
+			latch_c[MFU] = inst;
     }else {
       if (d) cout << "not instruction found (mfu) \n"; 
     }
-    latch_c[MFU] = inst;
+    
   } else if (counter == 3){
     inst->res = inst->src1_v * inst->src2_v;
     if (d) cout << "mfu found a result for " << inst->name << ": " << inst->res << endl;
@@ -678,7 +680,7 @@ int beu(){
 int simulate(){
    
   if (!eoe_flag){
-   	cout << "simulating...\n";
+   	//cout << "simulating...\n";
     int rv;
 
     
@@ -710,40 +712,38 @@ int simulate(){
       if (d) cout << "done with ls2\n";
       
     }
-
-    if (d) cout << "l/s units completed \n";
-
-    //mwb
-    if (counter == 0){
-      latch_c[MFUWB] = latch_c[MFU];
-      rv = mfuwb(latch_c[MFUWB]);
-      assert(rv == 0);
-      latch_c[MFU] = NULL;
-    }
-    //mlu
-		if (counter > 0){
-			rv = mfu(latch_c[MFU]);
-			assert(rv==0);
-		}
-
-    //aluwb
+		//aluwb
     latch_c[ALUWB] = latch_c[ALU2];
     aluwb(latch_c[ALUWB]);
 
     //alu2
     latch_c[ALU2] = latch_c[ALU1];
     alu2(latch_c[ALU2]);
+	
 
+    //mwb
+    if (counter == 0){
+      latch_c[MFUWB] = latch_c[MFU];
+      rv = mfuwb(latch_c[MFUWB]);
+      assert(rv == 0);
+      
+			latch_c[MFU] = NULL;
+			rv = mfu(latch_c[MFU]);
+			assert(rv==0);
+		
+    } else {
+			rv = mfu(latch_c[MFU]);
+			assert(rv==0);
+		}
+
+    
     //fetchey stuff
     alu1();
 		//beu
     rv = beu(); 
     assert(rv == 0);
 		
-		if (counter == 0){
-			rv = mfu(latch_c[MFU]);
-			assert(rv==0);
-		}
+		
 		if (!s_ls_flag && !s_ls_1){
 			rv = lsu1();
       assert(rv == 0);
@@ -791,6 +791,9 @@ int simulate(){
       if (ROB[rob_head].inst->type == HALT){
 				eoe_flag = true;
 				cout << "execution is done\n";
+				for(int i = 0 ; i < 17; i++){
+					RAT[i] = RRAT[i];
+				}
 			} 
 			if (ROB[rob_head].inst->type == STORE) stores ++;
 			if (ROB[rob_head].inst->type == LOAD) loads ++;
@@ -833,17 +836,16 @@ int simulate(){
     }
   dispatch_cycle ++;
   
-  cout << "end of cycle: " << dispatch_cycle <<endl;
+  //cout << "end of cycle: " << dispatch_cycle <<endl;
 	} else {
     
   }
-  
-  
   return 0;
 }
 
 void init (){
 	urf.resize(urf_s);
+	while (!FL.empty()) FL.pop();
   for (int i = 0; i < urf_s; i++){
     urf[i].value = 0;
     urf[i].valid = false;
@@ -1046,12 +1048,18 @@ int main (int argc, char *argv[]) {
     //transform(input.begin(), input.end(), input_t.begin(), toupper);
     for (int i = 0; i < input.length(); i++) input[i] = toupper(input[i]);
     if (d && IQ[0].valid) cout << IQ[0].inst->name << endl;
-    if (input[0] == 's' || input[0] == 'S'){
+    if ((input[0] == 's' || input[0] == 'S' )&& input[1]!='E'){
       if (input.find_first_of("0987654321", 1) != string::npos){
       int j = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
         for (int i = 0; i < j; i++){
           simulate();
         }
+				display();
+				print_iq();
+				print_rob();
+				print_urf();
+				print_map_tables();
+				print_stats();
       } else {
         simulate();
       }
@@ -1070,11 +1078,21 @@ int main (int argc, char *argv[]) {
 		}else if (input == "PRINT_MAP_TABLES"){
 			print_map_tables();
 		} else if (input.find("SET_URF_SIZE") != string::npos){
+			while (!FL.empty()) FL.pop();
 			urf_s = stoi(input.substr(input.find_first_of("0987654321", 1), input.length()), nullptr, 10);
 			urf.resize(urf_s);
+			for (int i = 0; i < urf_s; i++){
+				urf[i].value = 0;
+				urf[i].valid = false;
+				urf[i].consumer1.resize(0);
+				urf[i].consumer2.resize(0);
+				FL.push(i);
+			}
 		} else if (input == "PRINT_STATS") {
 			print_stats();
 		} else if (input[0] == 'Q'){
+			icache.clear();
+			urf.clear();
 			return 0;
 		} else {
       // nothing here yet
@@ -1083,4 +1101,6 @@ int main (int argc, char *argv[]) {
   }while(true);
   
   icache.clear();
+	urf.clear();
+	return 0;
 }
