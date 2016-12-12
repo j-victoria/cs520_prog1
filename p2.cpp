@@ -262,6 +262,10 @@ int decode (Instruction * inst){
   return 0;
 }
 
+/**
+ * dispatch
+ * Performs actions related to dispatching an instruction to the IQ.
+ */
 int dispatch (Instruction * inst){
   //set up IQ entry
   //mark stuff as 
@@ -341,6 +345,10 @@ int dispatch (Instruction * inst){
 //this is where the IQ is
 //decoupled
 
+/**
+ * alu1
+ * Simulates the first stage of the ALU.
+ */
 int alu1 (){
   Instruction * inst = NULL;
   int min = 1000000;
@@ -373,6 +381,10 @@ int alu1 (){
   return 0;
 }
 
+/**
+ * alu2
+ * Simulates the second (finishing calculation) stage of the ALU.
+ */
 int alu2 (Instruction * inst){
   //actually calculate results lol
   //fwd results
@@ -430,7 +442,10 @@ int alu2 (Instruction * inst){
   return 0;
 }
 
-
+/**
+ * aluwb
+ * Simulates the ALU writeback stage.
+ */
 int aluwb (Instruction * inst){
   //write back!
   if (inst != NULL){
@@ -443,6 +458,10 @@ int aluwb (Instruction * inst){
   return 0;
 }
 
+/**
+ * mfu
+ * Simulates the multiplication FU.
+ */
 int mfu (Instruction * inst){
   //takes 4 cycles
   //calcuate & fwd results
@@ -500,6 +519,10 @@ int mfu (Instruction * inst){
   return 0;
 }
 
+/**
+ * mfuwb
+ * Simulates the multiplication FU writeback stage.
+ */
 int mfuwb (Instruction * inst){
   if (inst != NULL){
     inst->latch_loc = MFUWB;
@@ -511,6 +534,10 @@ int mfuwb (Instruction * inst){
   return 0;
 }
 
+/**
+ * lsu1
+ * Calculates memory operation target address.
+ */
 int lsu1(){
   Instruction * inst = NULL;
   int min = 10000000;
@@ -544,6 +571,11 @@ int lsu1(){
   }
   return 0;
 }
+
+/**
+ * lsu2
+ * Simulates the second stage of load/store processing.
+ */
 int lsu2(Instruction * inst){
   s_ls_flag = false;
   if (inst != NULL){
@@ -552,7 +584,7 @@ int lsu2(Instruction * inst){
     if (inst->rob_loc == rob_head){
       if (inst->type == LOAD){
         inst->res = memory[inst->res/4];
-        if (d) cout << "data retrived from memory: " << inst->res << ": " << inst->name << endl;
+        if (d) cout << "data retrieved from memory: " << inst->res << ": " << inst->name << endl;
         while(!urf[inst->dest].consumer1.empty() && urf[inst->dest].consumer1.back() != NULL){
           //Instruction * con = urf[inst->dest].consumer1.back();
           if (!(urf[inst->dest].consumer1.back()->src1)){
@@ -598,6 +630,10 @@ int lsu2(Instruction * inst){
   return 0;
 }
 
+/**
+ * lswb
+ * Simulates the load/store writeback stage.
+ */
 int lswb(Instruction * inst){
   if (inst != NULL){
     inst->latch_loc = LSWB;
@@ -611,6 +647,11 @@ int lswb(Instruction * inst){
   }
   return 0;
 }
+
+/**
+ * beu
+ * Simulates the 'branch execution unit' (Branch FU).
+ */
 int beu(){
   int min = 100000;
   Instruction * inst = NULL;
@@ -677,6 +718,10 @@ int beu(){
   return 0;
 }
 
+/**
+ * simulate
+ * Simulates running one clock cycle, with retirement and rollback logic.
+ */
 int simulate(){
    
   if (!eoe_flag){
@@ -843,6 +888,10 @@ int simulate(){
   return 0;
 }
 
+/**
+ * init
+ * Initializes shared structures for the beginning of execution.
+ */
 void init (){
 	urf.resize(urf_s);
 	while (!FL.empty()) FL.pop();
@@ -924,6 +973,10 @@ void display () {
 	}
 }
 
+/**
+ * print_iq
+ * Prints the contents of the IQ.
+ */
 void print_iq (){
   for(int i = 0; i < IQ_SIZE; i++){
     if (IQ[i].valid){
@@ -972,6 +1025,10 @@ void print_memory(int a1, int a2) {
   }
 }
 
+/**
+ * print_rob
+ * Prints out the current head/tail location, and contents of the ROB.
+ */
 void print_rob(){
 	int i = rob_head; 
 	cout << "head: " << rob_head << " tail: " << rob_tail << endl;
@@ -982,6 +1039,10 @@ void print_rob(){
 	return;
 }
 
+/**
+ * print_map_tables
+ * Displays the RAT and R-RAT entries associated with each architectural register.
+ */
 void print_map_tables(){
 	for (int i = 0; i < 17; i++){
 		cout << i << ": RAT ";
@@ -1001,6 +1062,10 @@ void print_map_tables(){
 	
 }
 
+/**
+ * print_urf
+ * Prints the contents of the unified register file.
+ */
 void print_urf(){
 	for (int i = 0; i < urf_s; i++){
 		cout << "P" << i << ": ";
@@ -1022,6 +1087,10 @@ void print_urf(){
 	return;
 }
 
+/**
+ * print_stats
+ * Displays statistics about the current execution.
+ */
 void print_stats(){
 	cout << "IPC: " << ((float)instructions)/dispatch_cycle << endl;
 	cout << "dispatch stalls: "<< stall_dis << endl;

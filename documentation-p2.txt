@@ -5,7 +5,7 @@ Marvin Vinluan (mvinlua1)
 
 Design Document
 
-> p2.cpp ###################### Are we changing the filename later?
+> p2.cpp
 Responsible for user interface, reading input file, and simulating pipeline stages.
 
 > util.h
@@ -19,26 +19,26 @@ Defines an enumeration representing the different types of instructions.
 Implementation Overview
 
 Forwarding: 
-  - Implimented as a waiting bit vector - each physical register has a list of pointers to the consumer of the result
+  - Implemented as a waiting bit vector - each physical register has a list of pointers to the consumer of the result
 RAT:
-  - Array of ints refering to the index of the physical register. written to in dispatch
+  - Array of ints referring to the index of the physical register. Written to in dispatch
 RRAT: 
-  - Array of ints refering to the index of the physical register. Written to in the simulate function during instruction retirement.
+  - Array of ints referring to the index of the physical register. Written to in the simulate function during instruction retirement.
 Free List:
-  - Priority queue of ints, poped in dispatch, written to during instruction retirement.
+  - Priority queue of ints, popped in dispatch, written to during instruction retirement.
 IQ:
   - Array of a structure which includes a valid bit & a pointer to an instruction. Enties are written to in dispatch and cleared in their respective function unit
 ROB:
-  - Array of a structure which includes a valid bit, a finished bit & a pointer to an instruction. Entries are written to in dispatch and cleared in simulate during retirment at the end of a cycle. we can retire at most one instruction per cycle.
+  - Array of a structure which includes a valid bit, a finished bit & a pointer to an instruction. Entries are written to in dispatch and cleared in simulate during retirement at the end of a cycle. We can retire at most one instruction per cycle.
 URF:
   - Vector of register structures, which includes a valid bit & a value field. We can use indexing because the urf only changes during the 'set_urf_size' command
 
 
 Stages:
-  - each stage is implemented as a function
-  - each stage function takes a pointer to the instruction it is going to process, except alu1, lsfu1 & branch fu, which take nothing and get their instruction from the issue queue, and fetch, which takes the index of the line to be fetched.
-  - each stage function returns an integer referring to whether an error was found in that stage
-  - a supervisor function, simulate, assigns & calls each function with the appropriate pointer.
+  - Each stage is implemented as a function
+  - Each stage function takes a pointer to the instruction it is going to process, except alu1, lsfu1 & branch fu, which take nothing and get their instruction from the issue queue, and fetch, which takes the index of the line to be fetched.
+  - Each stage function returns an integer referring to whether an error was found in that stage
+  - A supervisor function, simulate, assigns & calls each function with the appropriate pointer.
   Fetch :
     - Gets the string instruction from the instruction structure
   Decode:
@@ -51,13 +51,12 @@ Stages:
   Dispatch:
     - Marks destination register as Invalid & sets up FE-RAT
     - If it cannot, causes a stall
-    - Otherwise it issues the instruction to the appropriate FU
-    - It also inserts a nop into the FU not in use
+    - Sets up respective IQ/ROB entries
   ALU 1:
     - Linearly probes the issue queue for an appropriate instruction.
   ALU 2:
     - Calculate the result. 
-    - if there are any consumers of the result, write the result to the consumers.
+    - If there are any consumers of the result, write the result to the consumers.
   BEU:
     - Linearly probes the issue queue for an appropriate instruction.
     - Determines if branch is taken 
@@ -66,24 +65,24 @@ Stages:
   LSFU1:
     - Linearly probes the issue queue for an appropriate instruction.
     - Calculates the memory address
-    - if a STORE does not have its source1, stall
+    - If a STORE does not have its source1, stall
   LSFU2:
-    - if instruction is at the head of the ROB, reads from/writes to memory
-    - otherwise stalls
+    - If instruction is at the head of the ROB, reads from/writes to memory
+    - Otherwise stalls
     - When reading from memory, if there are any consumers of the result, write the result to the consumers.
   MULFU: 
-    - checks against counter global vairable
-    - when counter is 0: 
+    - Checks against counter global vairable
+    - When counter is 0: 
       - Linearly probes the issue queue for an appropriate instruction.
-      - increase counter
-    - when counter is 1 or 2
-      - increase counter
+      - Increase counter
+    - When counter is 1 or 2
+      - Increase counter
     - when counter is 3:
       - Calculate the result. 
-      - if there are any consumers of the result, write the result to the consumers.
-      - set counter to 0
+      - If there are any consumers of the result, write the result to the consumers.
+      - Set counter to 0
   Write Back (ALUWB, LSUWB, MULWB):
-    - if there is a destination, writes the result to the destination register
+    - If there is a destination, writes the result to the destination register
 
   
   Notes:
