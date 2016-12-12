@@ -1069,8 +1069,11 @@ int main (int argc, char *argv[]) {
       display();
     } else if (input == "PRINT_IQ"){
       print_iq();
-    //} else if (input == "PRINT_MEMORY") {
+    } else if (strtok(input, " ") == "PRINT_MEMORY") {
       // make print_memory work with 2 integer arguments
+      int a1_in = atoi(strtok(NULL, " "));
+      int a2_in = atoi(strtok(NULL, " "));
+      print_memory(a1_in, a2_in);
 		} else if (input == "PRINT_ROB"){
 			print_rob();
 		}else if (input == "PRINT_URF"){
