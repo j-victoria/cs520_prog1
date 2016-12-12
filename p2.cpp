@@ -1078,7 +1078,7 @@ int main (int argc, char *argv[]) {
       int a1_in = atoi(strtok(NULL, " "));
       int a2_in = atoi(strtok(NULL, " "));
       print_memory(a1_in, a2_in);
-      free(input_cstr);
+      delete(input_cstr);
 		} else if (input == "PRINT_ROB"){
 			print_rob();
 		}else if (input == "PRINT_URF"){
