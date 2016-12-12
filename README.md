@@ -1,4 +1,4 @@
-# cs520_prog1
+# cs520_prog1 & 2
 Simulator for the simple APEX pipeline with forwarding! discussed in class
 
 By Marvin Vinluan and Jay Victoria
@@ -18,8 +18,8 @@ There were 3 group meetings, one on Oct 30th, one on Nov 13th and one on Nov 19t
 make 
 to compile 
 
-./main file_to_run 
+./p2 file_to_run 
 to run normally
 
-./main file_to_run d
+./p2 file_to_run d
 to run in debug mode
