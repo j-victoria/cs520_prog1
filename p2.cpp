@@ -862,7 +862,7 @@ void init (){
 		ROB[i].renaming = ND;
   }
   rob_head = rob_tail = 0;
-  for (int i = 0; i < 1000; i ++){
+  for (int i = 0; i < MEM_SIZE; i ++){
   memory[i] = 0;
   } 
   fetch_c = fetch_n = -1;
@@ -872,6 +872,7 @@ void init (){
   for (int i = 0; i < 17; i++){
     RAT[i] = RRAT[i] = ND;
   }
+
   eoe_flag = false;
   icache.reserve(50000);
   dispatch_cycle = 0;
