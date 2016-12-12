@@ -64,6 +64,9 @@ bool d;
 vector<string> imem;
 Instruction * z_ptr;
 bool eoe_flag;
+bool s_ls_1;
+
+int stall_dis, no_is, loads, stores;
 
 int fetch (Instruction * inst){
   //fills in an empty instruction with the instruction sting/name
@@ -94,9 +97,6 @@ int fetch (Instruction * inst){
     inst->name = imem[fetch_c];
     inst->valid = true;
     inst->index = fetch_c;
-  } else {inst->valid = false;}
-  //populate the rest of the fields with ND's so there's no garbage
-  if (inst->valid){
     inst->dest= inst->src1_v= inst->src1_a= inst->src2_v= inst->src2_a= inst->lit= inst->res = inst->dest_ar = ND;
     inst->src1 = inst->src2 = true;
 		inst->branch_taken = false;
@@ -139,8 +139,11 @@ int decode (Instruction * inst){
       else if (s == "HALT") inst->type = HALT;
       else {cout << "SOmething went wrong :(\n"; exit(0); }
 
-      if (inst->name.find("X") != string::npos){
+      if (inst->type == JUMP && inst->name.find('X') != string::npos){
+				if (d) cout << "X: " << RAT[REG_X];
         inst->src1_a = RAT[REG_X];
+				if (d) cout << "src1: " << inst->src1_a;
+				inst->lit = 0;
       }
       int r = 1, j = 0;
 
@@ -165,7 +168,7 @@ int decode (Instruction * inst){
               inst->lit = ar;
               break;
             case JUMP :
-              if (inst->src1_a != REG_X){
+              if (inst->src1_a != RAT[REG_X]){
                 inst->src1_a = RAT[ar];
               } else {
                 inst->lit = ar;
@@ -498,7 +501,8 @@ int lsu1(){
   if(d) cout << "searching for an instruction for lsu1 \n";
   for (int i = 0; i < IQ_SIZE; i ++){
     if(IQ[i].valid){
-      if (IQ[i].inst->src1 && IQ[i].inst->src2 && (IQ[i].inst->type == LOAD || IQ[i].inst->type == STORE) && IQ[i].inst->dc < min){
+      if ((IQ[i].inst->type == LOAD || IQ[i].inst->type == STORE) && IQ[i].inst->dc < min){
+				
         inst = IQ[i].inst;
         min = inst->dc;
         index = i;
@@ -506,7 +510,12 @@ int lsu1(){
       }
     }
   }
-  latch_c[LSU1] = inst;
+	if (inst!= NULL){
+		if (!((inst->type == LOAD && inst->src1 && inst->src2) || (inst->type == STORE && inst->src2) )){
+			inst = NULL;
+		}
+	}
+	latch_c[LSU1] = inst;
   if (inst != NULL){
     inst->latch_loc = LSU1;
     inst->in_iq = false;
@@ -514,6 +523,7 @@ int lsu1(){
     if (d) cout << "instruction found (lsu 1): " << inst->name << endl;
     inst->res = (inst->type == LOAD ? inst->src1_v+inst->lit : inst->src2_v+inst->lit);
     if (d) cout << " address calculated for lsu1: " << inst->res << ": " << inst->name <<endl;
+		if (inst->type == STORE && !inst->src1) s_ls_1 = true;
   }
   return 0;
 }
@@ -586,12 +596,12 @@ int lswb(Instruction * inst){
 }
 int beu(){
   int min = 100000;
-  Instruction * inst;
+  Instruction * inst = NULL;
   int index;
   if (d) cout << "searching for an instruction for BEU\n";
   for (int i = 0; i < IQ_SIZE; i++){
-    
     if (IQ[i].valid){
+			if (d) cout << "found a valid entry\n";
       if (IQ[i].inst->src1 && IQ[i].inst->src2 && (IQ[i].inst->type == BAL || IQ[i].inst->type == BZ || IQ[i].inst->type == BNZ || IQ[i].inst->type == JUMP) && IQ[i].inst->dc < min)
       {
         if(d) cout << "found a possible candidate: " << IQ[i].inst->name << endl;
@@ -600,12 +610,13 @@ int beu(){
         index = i;
       }
     }
-  }
-
+	}
+	if (d) cout << "1\n";
   latch_c[BEU] = inst;
+	if (d) cout << latch_c[BEU] << "2\n";
   if (inst != NULL){
+		
     last_branch = NULL;
-    inst->latch_loc = BEU;
     inst->in_iq = false;
     IQ[index].valid = false;
   	
@@ -616,6 +627,7 @@ int beu(){
 					inst->branch_taken = true;
 				}
         branch_target = inst->res = inst->index + (inst->lit / 4);
+				if (d) cout << "branch target calculated to be: " << inst->res<< endl;
         break;
       case BNZ:
         if (inst->src1_v != 0 ){
@@ -623,19 +635,21 @@ int beu(){
 					inst->branch_taken = true;
 				}
         branch_target = inst->res = inst->index + (inst->lit / 4);
+				if (d) cout << "branch target calculated to be: " << inst->res<< endl;
         break;
       case BAL: case JUMP :
         b_flag = true; inst->branch_taken = true;
-        branch_target = inst->res = (inst->src1 + inst->lit - 4000) / 4;
-
+        branch_target = inst->res = (inst->src1_v + inst->lit - 4000) / 4;
+				if (d) cout << "branch target calculated to be: " << inst->res<< endl;
         break;
       default:
         exit(0);
     }
 
     if (inst -> type == BAL){
-      urf[inst->dest].value = index + 1;
+      urf[inst->dest].value = (inst->index + 1) * 4 + 4000;
       urf[inst->dest].valid = true;
+			if (d) cout << inst->name <<" wrote "<<  inst->index + 1 << " to " << inst->dest << endl;
       //we actually don't have to forward b/c of how the branches are set up
     }
 
@@ -647,17 +661,12 @@ int beu(){
 }
 
 int simulate(){
-    cout << "simulating...\n";
+   
   if (!eoe_flag){
-    
+   	cout << "simulating...\n";
     int rv;
 
-    //beu
-    rv = beu(); 
-    assert(rv == 0);
-
-    if (d) cout << "branch fu completed \n";
-
+    
     //lswb
     if (! s_ls_flag){
       latch_c[LSWB] = latch_c[LSU2];
@@ -670,21 +679,21 @@ int simulate(){
     if (d) cout << "l/s write back completed \n";
 
     //ls2 & ls1
-    if (! s_ls_flag){
+    if (!s_ls_flag && !s_ls_1){
       latch_c[LSU2] = latch_c[LSU1];
       rv = lsu2(latch_c[LSU2]);
       assert(rv ==0);
-      if (d) cout << "done with ls2\n";
-      rv = lsu1();
-      assert(rv == 0);
-    } else{
+    } else if (latch_c[LSU1] != NULL && !s_ls_flag){
+			if (latch_c[LSU1]->src1){
+				s_ls_1 = false;
+				latch_c[LSU2] = latch_c[LSU1];
+				lsu2(latch_c[LSU2]);
+			}
+		}else{
       rv = lsu2(latch_c[LSU2]);
       assert(rv == 0);
       if (d) cout << "done with ls2\n";
-      if (latch_c[LSU1] == NULL){
-        rv = lsu1();
-        assert(rv == 0);
-      }
+      
     }
 
     if (d) cout << "l/s units completed \n";
@@ -697,10 +706,10 @@ int simulate(){
       latch_c[MFU] = NULL;
     }
     //mlu
-    rv = mfu(latch_c[MFU]);
-    assert(rv==0);
-
-    if (d) cout << "multiply units completed \n";
+		if (counter > 0){
+			rv = mfu(latch_c[MFU]);
+			assert(rv==0);
+		}
 
     //aluwb
     latch_c[ALUWB] = latch_c[ALU2];
@@ -710,18 +719,36 @@ int simulate(){
     latch_c[ALU2] = latch_c[ALU1];
     alu2(latch_c[ALU2]);
 
-    //alu1
+    //fetchey stuff
     alu1();
-
+		//beu
+    rv = beu(); 
+    assert(rv == 0);
+		
+		if (counter == 0){
+			rv = mfu(latch_c[MFU]);
+			assert(rv==0);
+		}
+		if (!s_ls_flag && !s_ls_1){
+			rv = lsu1();
+      assert(rv == 0);
+		} else if (latch_c[LSU1] == NULL){
+			if (!s_ls_1){
+				rv = lsu1();
+        assert(rv == 0);
+			}
+		}	
     //dispatch & decode & fetch
     Instruction f;
     if (b_flag){
       //do nothing 
+			stall_dis ++;
 			if (d) cout << "nothing is happening because a branch is gonna come in here and fuck every thing up\n";
       
     } else if (s_d_flag){
       rv = dispatch(latch_c[DISPATCH]);
       assert(rv == 0);
+			stall_dis++;
     }else {
       fetch_c = fetch_c + 1;
       latch_c[DISPATCH] = latch_c[DECODE];
@@ -748,6 +775,8 @@ int simulate(){
 				eoe_flag = true;
 				cout << "execution is done\n";
 			} 
+			if (ROB[rob_head].inst->type == STORE) stores ++;
+			if (ROB[rob_head].inst->type == LOAD) loads ++;
       if (ROB[rob_head].renaming!= ND){
         urf[ROB[rob_head].renaming].valid = false;
         FL.push(ROB[rob_head].renaming);
@@ -762,7 +791,7 @@ int simulate(){
 				for (int i = 0; i < IQ_SIZE; i++){
 					IQ[i].valid = false;
 				}
-				for (int i = 0; i < FETCH; i++){
+				for (int i = 0; i <= FETCH; i++){
 					latch_c[i] = NULL;
 				}
 				for (int i = 0; i <= REG_X; i++){
@@ -786,7 +815,7 @@ int simulate(){
     }
   dispatch_cycle ++;
   
-  if (d) cout << "end of cycle: " << dispatch_cycle <<endl;
+  cout << "end of cycle: " << dispatch_cycle <<endl;
 	} else {
     
   }
@@ -831,11 +860,13 @@ void init (){
   branch_target = 0;
   counter = 0;
   last_branch = NULL;
+	stall_dis =  no_is = loads = stores = 0;
+	s_ls_1 = false;
 }
 
 /**
  * display
- * Prints the status of each pipeline stage and each physical register.
+ * Prints the status of each pipeline stage and each architectural register.
  */
 void display () {
   cout << "Fetch: " << fetch_c;
@@ -860,6 +891,11 @@ void display () {
 		cout << " " ;
     if (i % 4 == 3) cout << endl;
   }
+	cout << "\n memory: ";
+	for (int i = 0; i < 100; i++){
+		cout << i * 4 << ": " << memory[i] << " ";
+		if (i % 8 == 7) cout << endl;
+	}
 }
 
 void print_iq (){
@@ -889,7 +925,7 @@ void print_iq (){
         cout << IQ[i].inst->lit;
       }
     } else {
-      cout << i  << ": i\n";
+      cout << i  << ": i";
     }
   cout << endl;
   }
