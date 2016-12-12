@@ -18,3 +18,74 @@ Defines an enumeration representing the different types of instructions.
 
 Implementation Overview
 
+Forwarding: 
+  - Implimented as a waiting bit vector - each physical register has a list of pointers to the consumer of the result
+RAT:
+  - Array of ints refering to the index of the physical register. written to in dispatch
+RRAT: 
+  - Array of ints refering to the index of the physical register. Written to in the simulate function during instruction retirement.
+Free List:
+  - Priority queue of ints, poped in dispatch, written to during instruction retirement.
+IQ:
+  - Array of a structure which includes a valid bit & a pointer to an instruction. Enties are written to in dispatch and cleared in their respective function unit
+ROB:
+  - Array of a structure which includes a valid bit, a finished bit & a pointer to an instruction. Entries are written to in dispatch and cleared in simulate during retirment at the end of a cycle. we can retire at most one instruction per cycle.
+URF:
+  - Vector of register structures, which includes a valid bit & a value field. We can use indexing because the urf only changes during the 'set_urf_size' command
+
+
+Stages:
+  - each stage is implemented as a function
+  - each stage function takes a pointer to the instruction it is going to process, except alu1, lsfu1 & branch fu, which take nothing and get their instruction from the issue queue, and fetch, which takes the index of the line to be fetched.
+  - each stage function returns an integer referring to whether an error was found in that stage
+  - a supervisor function, simulate, assigns & calls each function with the appropriate pointer.
+  Fetch :
+    - Gets the string instruction from the instruction structure
+  Decode:
+    - Gets the substring from the 1st character to the ' ' and sets the instruction type
+    - Checks against special cases (JUMP X & HALT)
+    - Retrieves digits from the string and writes them to their appropriate locations
+    - Tries to read sources from register file
+    - If it cannot read the sources, it sets up a dependency
+    - Arranged sources and destination not explicitly specified, like in BZ or BAL
+  Dispatch:
+    - Marks destination register as Invalid & sets up FE-RAT
+    - If it cannot, causes a stall
+    - Otherwise it issues the instruction to the appropriate FU
+    - It also inserts a nop into the FU not in use
+  ALU 1:
+    - Linearly probes the issue queue for an appropriate instruction.
+  ALU 2:
+    - Calculate the result. 
+    - if there are any consumers of the result, write the result to the consumers.
+  BEU:
+    - Linearly probes the issue queue for an appropriate instruction.
+    - Determines if branch is taken 
+    - Sets the 'b-flag' global variable
+    - In case of a BAL, write the value to the register
+  LSFU1:
+    - Linearly probes the issue queue for an appropriate instruction.
+    - Calculates the memory address
+    - if a STORE does not have its source1, stall
+  LSFU2:
+    - if instruction is at the head of the ROB, reads from/writes to memory
+    - otherwise stalls
+    - When reading from memory, if there are any consumers of the result, write the result to the consumers.
+  MULFU: 
+    - checks against counter global vairable
+    - when counter is 0: 
+      - Linearly probes the issue queue for an appropriate instruction.
+      - increase counter
+    - when counter is 1 or 2
+      - increase counter
+    - when counter is 3:
+      - Calculate the result. 
+      - if there are any consumers of the result, write the result to the consumers.
+      - set counter to 0
+  Write Back (ALUWB, LSUWB, MULWB):
+    - if there is a destination, writes the result to the destination register
+
+  
+  Notes:
+  The X register is represented in our simulator as AR 16
+

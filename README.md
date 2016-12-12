@@ -9,7 +9,9 @@ Test input files all start with 'test'
 
 The commit history of this git repository represents the work log
 
-There were 3 group meetings, one on Oct 30th, one on Nov 13th and one on Nov 19th
+Screenshots of test_input_1.txt & test_input_2.txt's output is in the image files that start with screen_shot_test_input
+
+q to exit/quit
 
 make 
 to compile 
